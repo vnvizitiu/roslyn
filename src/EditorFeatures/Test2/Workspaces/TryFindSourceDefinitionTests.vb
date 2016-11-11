@@ -1,18 +1,22 @@
 ' Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
-Imports System.Linq
 Imports System.Threading
 Imports System.Threading.Tasks
 Imports Microsoft.CodeAnalysis
 Imports Microsoft.CodeAnalysis.FindSymbols
-Imports Microsoft.CodeAnalysis.Text
-Imports Xunit
+Imports Xunit.Abstractions
 
 Namespace Microsoft.CodeAnalysis.Editor.UnitTests.Workspaces
     Public Class TryFindSourceDefinitionTests
+        Private ReadOnly _outputHelper As ITestOutputHelper
+
         Private Function GetProject(snapshot As Solution, assemblyName As String) As Project
             Return snapshot.Projects.Single(Function(p) p.AssemblyName = assemblyName)
         End Function
+
+        Public Sub New(outputHelper As ITestOutputHelper)
+            _outputHelper = outputHelper
+        End Sub
 
         <Fact>
         Public Async Function TestFindTypeInCSharpToVisualBasicProject() As Task
@@ -40,6 +44,8 @@ Namespace Microsoft.CodeAnalysis.Editor.UnitTests.Workspaces
 </Workspace>
 
             Using workspace = Await TestWorkspace.CreateAsync(workspaceDefinition)
+                workspace.SetTestLogger(AddressOf _outputHelper.WriteLine)
+
                 Dim snapshot = workspace.CurrentSolution
                 Dim Type = (Await GetProject(snapshot, "CSharpAssembly").GetCompilationAsync()).GlobalNamespace.GetTypeMembers("CSClass").Single()
 
@@ -84,6 +90,7 @@ Namespace Microsoft.CodeAnalysis.Editor.UnitTests.Workspaces
 </Workspace>
 
             Using workspace = Await TestWorkspace.CreateAsync(workspaceDefinition)
+                workspace.SetTestLogger(AddressOf _outputHelper.WriteLine)
                 Dim snapshot = workspace.CurrentSolution
                 Dim Type = (Await GetProject(snapshot, "VBAssembly").GetCompilationAsync()).GlobalNamespace.GetTypeMembers("VBClass").Single()
 
@@ -125,6 +132,7 @@ Namespace Microsoft.CodeAnalysis.Editor.UnitTests.Workspaces
 </Workspace>
 
             Using workspace = Await TestWorkspace.CreateAsync(workspaceDefinition)
+                workspace.SetTestLogger(AddressOf _outputHelper.WriteLine)
                 Dim compilation = Await GetProject(workspace.CurrentSolution, "VBAssembly").GetCompilationAsync()
                 Dim member = compilation.GlobalNamespace.GetMembers("N").Single().GetTypeMembers("CSClass").Single().GetMembers("M").Single()
 
@@ -163,6 +171,7 @@ Namespace Microsoft.CodeAnalysis.Editor.UnitTests.Workspaces
 </Workspace>
 
             Using workspace = Await TestWorkspace.CreateAsync(workspaceDefinition)
+                workspace.SetTestLogger(AddressOf _outputHelper.WriteLine)
                 Dim compilation = Await GetProject(workspace.CurrentSolution, "VBAssembly").GetCompilationAsync()
                 Dim member = compilation.GlobalNamespace.GetMembers("N").Single().GetTypeMembers("CSClass").Single().GetMembers("M").Single()
 
@@ -201,6 +210,7 @@ Namespace Microsoft.CodeAnalysis.Editor.UnitTests.Workspaces
 </Workspace>
 
             Using workspace = Await TestWorkspace.CreateAsync(workspaceDefinition)
+                workspace.SetTestLogger(AddressOf _outputHelper.WriteLine)
                 Dim compilation = Await GetProject(workspace.CurrentSolution, "VBAssembly").GetCompilationAsync()
                 Dim member = compilation.GlobalNamespace.GetMembers("N").Single().GetTypeMembers("CSClass").Single().GetMembers("M").Single()
 
@@ -236,6 +246,7 @@ Namespace Microsoft.CodeAnalysis.Editor.UnitTests.Workspaces
 </Workspace>
 
             Using workspace = Await TestWorkspace.CreateAsync(workspaceDefinition)
+                workspace.SetTestLogger(AddressOf _outputHelper.WriteLine)
                 Dim retargetedCompilation = Await GetProject(workspace.CurrentSolution, "CSharpAssembly").GetCompilationAsync()
                 Dim originalClass = retargetedCompilation.GlobalNamespace.GetMembers("N").Single().GetTypeMembers("CSClass").Single()
                 Dim retargetingCompilation = Await GetProject(workspace.CurrentSolution, "CSharpAssembly2").GetCompilationAsync()

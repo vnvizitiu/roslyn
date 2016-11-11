@@ -9,12 +9,51 @@ Imports System.Xml.Linq
 Imports System.Text
 Imports System.IO
 Imports Roslyn.Test.Utilities
+Imports Microsoft.CodeAnalysis.VisualBasic.VisualBasicCompilation
 
 Namespace Microsoft.CodeAnalysis.VisualBasic.UnitTests
     Public Class DocCommentTests
         Inherits BasicTestBase
 
         Private Shared ReadOnly s_optionsDiagnoseDocComments As VisualBasicParseOptions = VisualBasicParseOptions.Default.WithDocumentationMode(DocumentationMode.Diagnose)
+
+        <Fact>
+        Public Sub DocCommentWriteException()
+            Dim sources =
+<compilation name="DocCommentException">
+    <file name="a.vb">
+        <![CDATA[
+''' <summary>
+''' Doc comment for <see href="C" />
+''' </summary>
+Public Class C
+    ''' <summary>
+    ''' Doc comment for method M
+    ''' </summary>
+    Public Sub M()
+    End Sub
+End Class
+]]>
+    </file>
+</compilation>
+
+            Dim comp = CreateCompilationWithMscorlib(sources)
+            Dim diags = New DiagnosticBag()
+            Dim badStream = New BrokenStream()
+            badStream.BreakHow = BrokenStream.BreakHowType.ThrowOnWrite
+
+            DocumentationCommentCompiler.WriteDocumentationCommentXml(
+                comp,
+                assemblyName:=Nothing,
+                xmlDocStream:=badStream,
+                diagnostics:=diags,
+                cancellationToken:=Nothing)
+
+            AssertTheseDiagnostics(diags.ToReadOnlyAndFree(),
+                                   <errors><![CDATA[
+BC37258: Error writing to XML documentation file: I/O error occurred.
+                                   ]]></errors>)
+        End Sub
 
         <Fact>
         Public Sub NoXmlResolver()
@@ -6734,7 +6773,8 @@ End Class
 
         End Sub
 
-        <Fact(Skip:="1104815")>
+        <Fact>
+        <WorkItem(4719, "https://github.com/dotnet/roslyn/issues/4719")>
         Public Sub CrefLookup()
             Dim source =
                 <compilation name="AssemblyName">
@@ -6763,7 +6803,14 @@ End Class
             Dim inner = outer.GetMember(Of NamedTypeSymbol)("Inner")
 
             Dim position = syntaxTree.ToString().IndexOf("(Of U)", StringComparison.Ordinal)
-            Assert.Equal(inner, model.LookupSymbols(position, outer, inner.Name).Single())
+
+            Const bug4719IsFixed = False
+
+            If bug4719IsFixed Then
+                Assert.Equal(inner, model.LookupSymbols(position, outer, inner.Name).Single())
+            Else
+                Assert.False(model.LookupSymbols(position, outer, inner.Name).Any())
+            End If
         End Sub
 
         <Fact()>
@@ -7359,7 +7406,7 @@ End Class
                     "Function System.Int32.Parse(s As System.String, style As System.Globalization.NumberStyles, provider As System.IFormatProvider) As System.Int32")
         End Sub
 
-        <Fact>
+        <Fact(Skip:="https://github.com/dotnet/roslyn/issues/8807")>
         Public Sub Include_XPathNotFound_WRN_XMLDocInvalidXMLFragment()
             Dim xmlText = <root/>
             Dim xmlFile = Temp.CreateFile(extension:=".xml").WriteAllText(xmlText.ToString)
@@ -7405,7 +7452,7 @@ AssemblyName
         End Sub
 
         <WorkItem(684184, "http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/684184")>
-        <Fact>
+        <Fact(Skip:="https://github.com/dotnet/roslyn/issues/8807")>
         Public Sub Bug684184()
             Dim xmlText =
 <docs>
@@ -7450,7 +7497,7 @@ AssemblyName
             stringMapper:=Function(o) StringReplace(o, AsXmlCommentText(xmlFile), "**FILE**"), ensureEnglishUICulture:=True)
         End Sub
 
-        <Fact>
+        <Fact(Skip:="https://github.com/dotnet/roslyn/issues/8807")>
         Public Sub Include_FileNotFound_WRN_XMLDocBadFormedXML()
             Dim xmlText = <root/>
             Dim xmlFile = Temp.CreateFile(extension:=".xml").WriteAllText(xmlText.ToString)
@@ -7495,7 +7542,7 @@ AssemblyName
             stringMapper:=Function(o) StringReplace(o, AsXmlCommentText(xmlFile), "**FILE**"), ensureEnglishUICulture:=True)
         End Sub
 
-        <Fact>
+        <Fact(Skip:="https://github.com/dotnet/roslyn/issues/8807")>
         Public Sub Include_IOError_WRN_XMLDocBadFormedXML()
             Dim xmlText = <root>
                               <target>Included</target>
@@ -7546,7 +7593,7 @@ AssemblyName
             End Using
         End Sub
 
-        <Fact>
+        <Fact(Skip:="https://github.com/dotnet/roslyn/issues/8807")>
         Public Sub Include_XmlError_WRN_XMLDocBadFormedXML()
             Dim xmlText =
             <![CDATA[
@@ -7596,7 +7643,7 @@ AssemblyName
                 stringMapper:=Function(o) StringReplace(o, AsXmlCommentText(xmlFile), "**FILE**"), ensureEnglishUICulture:=True)
         End Sub
 
-        <Fact>
+        <Fact(Skip:="https://github.com/dotnet/roslyn/issues/8807")>
         Public Sub Include_XDocument_WRN_XMLDocInvalidXMLFragment()
             Dim xmlText =
             <![CDATA[
@@ -7708,7 +7755,7 @@ AssemblyName
                 stringMapper:=Function(o) StringReplace(o, AsXmlCommentText(xmlFile), "**FILE**"), ensureEnglishUICulture:=True)
         End Sub
 
-        <Fact>
+        <Fact(Skip:="https://github.com/dotnet/roslyn/issues/8807")>
         Public Sub Include_XPathError_WRN_XMLDocBadFormedXML()
             Dim xmlText =
             <![CDATA[

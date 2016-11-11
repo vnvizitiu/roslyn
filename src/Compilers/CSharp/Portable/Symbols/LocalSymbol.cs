@@ -228,17 +228,6 @@ namespace Microsoft.CodeAnalysis.CSharp.Symbols
         }
 
         /// <summary>
-        /// Returns true if this local variable is declared in for-initializer
-        /// </summary>
-        public bool IsFor
-        {
-            get
-            {
-                return this.DeclarationKind == LocalDeclarationKind.ForInitializerVariable;
-            }
-        }
-
-        /// <summary>
         /// Returns true if this local variable is declared as iteration variable
         /// </summary>
         public bool IsForEach
@@ -330,6 +319,28 @@ namespace Microsoft.CodeAnalysis.CSharp.Symbols
         {
             get;
         }
+
+        internal virtual bool IsReturnable
+        {
+            get
+            {
+                // by default all locals are returnable
+                return true;
+            }
+        }
+
+        /// <summary>
+        /// When a local variable's type is inferred, it may not be used in the
+        /// expression that computes its value (and type). This property returns
+        /// the expression where a reference to an inferred variable is forbidden.
+        /// </summary>
+        internal virtual SyntaxNode ForbiddenZone => null;
+
+        /// <summary>
+        /// The diagnostic code to be reported when an inferred variable is used
+        /// in its forbidden zone.
+        /// </summary>
+        internal virtual ErrorCode ForbiddenDiagnostic => ErrorCode.ERR_VariableUsedBeforeDeclaration;
 
         #region ILocalSymbol Members
 

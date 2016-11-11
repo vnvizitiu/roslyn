@@ -16,6 +16,18 @@ Namespace Microsoft.CodeAnalysis.VisualBasic.Extensions
         End Function
 
         <Extension()>
+        Public Function IsParentKind(node As SyntaxNode, kind1 As SyntaxKind, kind2 As SyntaxKind) As Boolean
+            Return node IsNot Nothing AndAlso
+                   IsKind(node.Parent, kind1, kind2)
+        End Function
+
+        <Extension()>
+        Public Function IsParentKind(node As SyntaxNode, kind1 As SyntaxKind, kind2 As SyntaxKind, kind3 As SyntaxKind) As Boolean
+            Return node IsNot Nothing AndAlso
+                   IsKind(node.Parent, kind1, kind2, kind3)
+        End Function
+
+        <Extension()>
         Public Function IsKind(node As SyntaxNode, kind1 As SyntaxKind, kind2 As SyntaxKind) As Boolean
             If node Is Nothing Then
                 Return False
@@ -220,25 +232,6 @@ Namespace Microsoft.CodeAnalysis.VisualBasic.Extensions
                    lambda.Kind = SyntaxKind.MultiLineFunctionLambdaExpression
         End Function
 
-        <Extension()>
-        Friend Function WithPrependedLeadingTrivia(Of T As SyntaxNode)(node As T, ParamArray trivia As SyntaxTrivia()) As T
-            Return node.WithPrependedLeadingTrivia(DirectCast(trivia, IEnumerable(Of SyntaxTrivia)))
-        End Function
-
-        <Extension()>
-        Friend Function WithPrependedLeadingTrivia(Of T As SyntaxNode)(node As T, trivia As IEnumerable(Of SyntaxTrivia)) As T
-            Return DirectCast(node.WithLeadingTrivia(trivia.Concat(node.GetLeadingTrivia())), T)
-        End Function
-
-        <Extension()>
-        Friend Function WithAppendedTrailingTrivia(Of T As SyntaxNode)(node As T, ParamArray trivia As SyntaxTrivia()) As T
-            Return node.WithAppendedTrailingTrivia(DirectCast(trivia, IEnumerable(Of SyntaxTrivia)))
-        End Function
-
-        <Extension()>
-        Friend Function WithAppendedTrailingTrivia(Of T As SyntaxNode)(node As T, trivia As IEnumerable(Of SyntaxTrivia)) As T
-            Return DirectCast(node.WithTrailingTrivia(node.GetTrailingTrivia().Concat(trivia)), T)
-        End Function
 
         <Extension()>
         Friend Function GetTypeCharacterString(type As TypeCharacter) As String
@@ -272,12 +265,12 @@ Namespace Microsoft.CodeAnalysis.VisualBasic.Extensions
         End Function
 
         <Extension()>
-        Public Function ConvertToSingleLine(Of TNode As SyntaxNode)(node As TNode) As TNode
+        Public Function ConvertToSingleLine(Of TNode As SyntaxNode)(node As TNode, Optional useElasticTrivia As Boolean = False) As TNode
             If node Is Nothing Then
                 Return node
             End If
 
-            Dim rewriter = New SingleLineRewriter()
+            Dim rewriter = New SingleLineRewriter(useElasticTrivia)
             Return DirectCast(rewriter.Visit(node), TNode)
         End Function
 

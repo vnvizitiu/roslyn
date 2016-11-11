@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Microsoft.CodeAnalysis.CodeFixes;
 using Microsoft.CodeAnalysis.CSharp.CodeFixes.RemoveUnnecessaryCast;
 using Microsoft.CodeAnalysis.CSharp.Diagnostics.RemoveUnnecessaryCast;
+using Microsoft.CodeAnalysis.CSharp.Test.Utilities;
 using Microsoft.CodeAnalysis.Diagnostics;
 using Roslyn.Test.Utilities;
 using Xunit;
@@ -24,16 +25,16 @@ namespace Microsoft.CodeAnalysis.Editor.CSharp.UnitTests.Diagnostics.RemoveUnnec
         public async Task DontRemoveCastToErrorType()
         {
             await TestMissingAsync(
-            @"
-class Program
+@"class Program
 {
     static void Main()
     {
         object s = "";
-        foreach (object x in [|(ErrorType)s|]) { }
+        foreach (object x in [|(ErrorType)s|])
+        {
+        }
     }
-}
-");
+}");
         }
 
         [WorkItem(545137, "http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/545137"), WorkItem(870550, "http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/870550")]
@@ -140,15 +141,13 @@ class Program
         public async Task DontRemoveTypeParameterCastToObject()
         {
             await TestMissingAsync(
-            @"
-class Ð¡
+@"class Ð¡
 {
     void Foo<T>(T obj)
-    {
-        int x = (int)[|(object)obj|];
-    }
+{
+    int x = (int)[|(object)obj|];
 }
-");
+}");
         }
 
         [WorkItem(545139, "http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/545139")]
@@ -156,18 +155,17 @@ class Ð¡
         public async Task DontRemoveCastInIsTest()
         {
             await TestMissingAsync(
-            @"
-using System;
+@"using System;
 
 class Ð¡
 {
     static void Main()
-    {
-        DayOfWeek[] a = { };
-        Console.WriteLine([|(object)a|] is int[]);
-    }
+{
+    DayOfWeek[] a = {
+    };
+    Console.WriteLine([|(object)a|] is int[]);
 }
-");
+}");
         }
 
         [WorkItem(545142, "http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/545142")]
@@ -175,23 +173,21 @@ class Ð¡
         public async Task DontRemoveCastNeedForUserDefinedOperator()
         {
             await TestMissingAsync(
-            @"
-class A
+@"class A
 {
     public static implicit operator A(string x)
     {
         return new A();
     }
 }
- 
+
 class Program
 {
     static void Main()
     {
         A x = [|(string)null|];
     }
-}
-");
+}");
         }
 
         [WorkItem(545143, "http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/545143")]
@@ -199,15 +195,13 @@ class Program
         public async Task DontRemovePointerCast1()
         {
             await TestMissingAsync(
-            @"
-unsafe class C
+@"unsafe class C
 {
     static unsafe void Main()
     {
         var x = (int)[|(int*)null|];
     }
-}
-");
+}");
         }
 
         [WorkItem(545144, "http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/545144")]
@@ -218,8 +212,7 @@ unsafe class C
             // op_Equality operator overload being used over reference equality.
 
             await TestMissingAsync(
-            @"
-using System;
+@"using System;
 
 class Program
 {
@@ -229,8 +222,7 @@ class Program
         Action b = Console.WriteLine;
         Console.WriteLine(a == [|(object)b|]);
     }
-}
-");
+}");
         }
 
         [WorkItem(545145, "http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/545145")]
@@ -238,17 +230,18 @@ class Program
         public async Task DontRemoveCastToAnonymousMethodWhenOnLeftOfAsCast()
         {
             await TestMissingAsync(
-            @"
-using System;
+@"using System;
 
 class C
 {
     static void Main()
     {
-        var x = [|(Action)delegate { }|] as Action;
+        var x = [|(Action)delegate {
+        }|]
+
+        as Action;
     }
-}
-");
+}");
         }
 
         [WorkItem(545147, "http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/545147")]
@@ -256,16 +249,14 @@ class C
         public async Task DontRemoveCastInFloatingPointOperation()
         {
             await TestMissingAsync(
-            @"
-class C
+@"class C
 {
     static void Main()
     {
         int x = 1;
         double y = [|(double)x|] / 2;
     }
-}
-");
+}");
         }
 
         [WorkItem(545157, "http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/545157")]
@@ -273,20 +264,23 @@ class C
         public async Task DontRemoveIdentityCastWhichAffectsOverloadResolution1()
         {
             await TestMissingAsync(
-            @"
-using System;
- 
+@"using System;
+
 class Program
 {
     static void Main()
     {
         Foo(x => [|(int)x|]);
     }
- 
-    static void Foo(Func<int, object> x) { }
-    static void Foo(Func<string, object> x) { }
-}
-");
+
+    static void Foo(Func<int, object> x)
+    {
+    }
+
+    static void Foo(Func<string, object> x)
+    {
+    }
+}");
         }
 
         [WorkItem(545158, "http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/545158")]
@@ -294,9 +288,8 @@ class Program
         public async Task DontRemoveIdentityCastWhichAffectsOverloadResolution2()
         {
             await TestMissingAsync(
-            @"
-using System;
- 
+@"using System;
+
 class Program
 {
     static void Main()
@@ -304,11 +297,15 @@ class Program
         var x = [|(IComparable<int>)1|];
         Foo(x);
     }
- 
-    static void Foo(IComparable<int> x) { }
-    static void Foo(int x) {}
-}
-");
+
+    static void Foo(IComparable<int> x)
+    {
+    }
+
+    static void Foo(int x)
+    {
+    }
+}");
         }
 
         [WorkItem(545158, "http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/545158")]
@@ -316,9 +313,8 @@ class Program
         public async Task DontRemoveIdentityCastWhichAffectsOverloadResolution3()
         {
             await TestMissingAsync(
-            @"
-using System;
- 
+@"using System;
+
 class Program
 {
     static void Main()
@@ -327,11 +323,15 @@ class Program
         var y = x;
         Foo(y);
     }
- 
-    static void Foo(IComparable<int> x) { }
-    static void Foo(int x) {}
-}
-");
+
+    static void Foo(IComparable<int> x)
+    {
+    }
+
+    static void Foo(int x)
+    {
+    }
+}");
         }
 
         [WorkItem(545747, "http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/545747")]
@@ -339,16 +339,14 @@ class Program
         public async Task DontRemoveCastWhichChangesTypeOfInferredLocal()
         {
             await TestMissingAsync(
-            @"
-class C
+@"class C
 {
     static void Main()
     {
         var x = [|(long)1|];
         x = long.MaxValue;
     }
-}
-");
+}");
         }
 
         [WorkItem(545159, "http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/545159")]
@@ -356,25 +354,24 @@ class C
         public async Task DontRemoveNeededCastToIListOfObject()
         {
             await TestMissingAsync(
-            @"
-using System;
+@"using System;
 using System.Collections.Generic;
- 
+
 class C
 {
     static void Main()
     {
-        Action<object>[] x = { };
+        Action<object>[] x = {
+        };
         Foo(x);
     }
- 
+
     static void Foo<T>(Action<T>[] x)
     {
         var y = (IList<Action<object>>)[|(IList<object>)x|];
         Console.WriteLine(y.Count);
     }
-}
-");
+}");
         }
 
         [WorkItem(545287, "http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/545287"), WorkItem(880752, "http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/880752")]
@@ -634,13 +631,11 @@ class Test
         public async Task DontRemoveNeededCastInConditionalExpression()
         {
             await TestMissingAsync(
-            @"
-class Test
+@"class Test
 {
     public static void Main()
     {
         int b = 5;
-
         var f1 = (b == 5) ? 4 : [|(long)5|];
     }
 }");
@@ -851,21 +846,26 @@ class Program
         public async Task DontRemoveNecessaryCastWhichInCollectionInitializer1()
         {
             await TestMissingAsync(
-            @"
-using System;
+@"using System;
 using System.Collections.Generic;
 
 class X : List<int>
 {
-    void Add(object x) { Console.WriteLine(1); }
-    void Add(string x) { Console.WriteLine(2); }
- 
+    void Add(object x)
+    {
+        Console.WriteLine(1);
+    }
+
+    void Add(string x)
+    {
+        Console.WriteLine(2);
+    }
+
     static void Main()
     {
         var z = new X { [|(object)""""|] };
     }
-}
-");
+}");
         }
 
         [WorkItem(529787, "http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/529787")]
@@ -873,21 +873,26 @@ class X : List<int>
         public async Task DontRemoveNecessaryCastWhichInCollectionInitializer2()
         {
             await TestMissingAsync(
-            @"
-using System;
+@"using System;
 using System.Collections.Generic;
 
 class X : List<int>
 {
-    void Add(object x) { Console.WriteLine(1); }
-    void Add(string x) { Console.WriteLine(2); }
+    void Add(object x)
+    {
+        Console.WriteLine(1);
+    }
+
+    void Add(string x)
+    {
+        Console.WriteLine(2);
+    }
 
     static void Main()
     {
         X z = new X { [|(object)""""|] };
     }
-}
-");
+}");
         }
 
         [WorkItem(545607, "http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/545607")]
@@ -995,16 +1000,16 @@ class Program
         public async Task DontRemoveNecessaryCastWithExplicitUserDefinedConversion()
         {
             await TestMissingAsync(
-            @"
-using System;
+@"using System;
+
 class A
 {
-    public static explicit operator long (A x)
+    public static explicit operator long(A x)
     {
         return 1;
     }
 
-    public static implicit operator int (A x)
+    public static implicit operator int(A x)
     {
         return 2;
     }
@@ -1012,10 +1017,8 @@ class A
     static void Main()
     {
         var a = new A();
-
         long x = [|(long)a|];
         long y = a;
-
         Console.WriteLine(x); // 1
         Console.WriteLine(y); // 2
     }
@@ -1027,16 +1030,15 @@ class A
         public async Task DontRemoveNecessaryCastWithImplicitUserDefinedConversion()
         {
             await TestMissingAsync(
-            @"
-class X
+@"class X
 {
     static void Foo()
     {
         X x = null;
         object y = [|(string)x|];
     }
- 
-    public static implicit operator string (X x)
+
+    public static implicit operator string(X x)
     {
         return "";
     }
@@ -1052,8 +1054,7 @@ class X
             // Exception.
 
             await TestMissingAsync(
-            @"
-using System;
+@"using System;
 
 class E
 {
@@ -1066,8 +1067,7 @@ class E
     {
         throw [|(Exception)new E()|];
     }
-}
-");
+}");
         }
 
         [WorkItem(545981, "http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/545981")]
@@ -1079,8 +1079,7 @@ class E
             // Exception.
 
             await TestMissingAsync(
-            @"
-using System;
+@"using System;
 
 class C
 {
@@ -1089,8 +1088,7 @@ class C
         object ex = new Exception();
         throw [|(Exception)ex|];
     }
-}
-");
+}");
         }
 
         [WorkItem(545941, "http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/545941")]
@@ -1130,15 +1128,13 @@ class E
         public async Task DontRemoveNecessaryDowncast()
         {
             await TestMissingAsync(
-            @"
-class C
+@"class C
 {
     void Foo(object y)
     {
         int x = [|(int)y|];
     }
-}
-");
+}");
         }
 
         [WorkItem(545591, "http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/545591")]
@@ -1146,21 +1142,37 @@ class C
         public async Task DontRemoveNecessaryCastWithinLambda()
         {
             await TestMissingAsync(
-            @"
-using System;
+@"using System;
+
 class Program
 {
     static void Main()
     {
-        Boo(x => Foo(x, y => [|(int)x|]), null); 
+        Boo(x => Foo(x, y => [|(int)x|]), null);
     }
-    static void Boo(Action<int> x, object y) { Console.WriteLine(1); }
-    static void Boo(Action<string> x, string y) { Console.WriteLine(2); }
-    static void Foo(int x, Func<int, int> y) { }
-    static void Foo(string x, Func<string, string> y) { }
-    static void Foo(string x, Func<int, int> y) { }
-}
-");
+
+    static void Boo(Action<int> x, object y)
+    {
+        Console.WriteLine(1);
+    }
+
+    static void Boo(Action<string> x, string y)
+    {
+        Console.WriteLine(2);
+    }
+
+    static void Foo(int x, Func<int, int> y)
+    {
+    }
+
+    static void Foo(string x, Func<string, string> y)
+    {
+    }
+
+    static void Foo(string x, Func<int, int> y)
+    {
+    }
+}");
         }
 
         [WorkItem(545606, "http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/545606")]
@@ -1168,15 +1180,13 @@ class Program
         public async Task DontRemoveNecessaryCastFromNullToTypeParameter()
         {
             await TestMissingAsync(
-            @"
-class X
+@"class X
 {
     static void Foo<T, S>() where T : class, S
     {
-        S y = [|(T) null|];
+        S y = [|(T)null|];
     }
-}
-");
+}");
         }
 
         [WorkItem(545744, "http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/545744")]
@@ -1184,17 +1194,15 @@ class X
         public async Task DontRemoveNecessaryCastInImplicitlyTypedArray()
         {
             await TestMissingAsync(
-            @"
-class X
+@"class X
 {
     static void Foo()
     {
         string x = "";
-        var s = new [] { [|(object)x|] };
+        var s = new[] { [|(object)x|] };
         s[0] = 1;
     }
-}
-");
+}");
         }
 
         [WorkItem(545750, "http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/545750")]
@@ -1331,20 +1339,26 @@ class A
         public async Task DontRemoveNecessaryCastInQueryExpression()
         {
             await TestMissingAsync(
-            @"
-using System;
+@"using System;
 
 class A
 {
-    int Select(Func<int, long> x) { return 1; }
-    int Select(Func<int, int> x) { return 2; }
+    int Select(Func<int, long> x)
+    {
+        return 1;
+    }
+
+    int Select(Func<int, int> x)
+    {
+        return 2;
+    }
 
     static void Main()
     {
-        Console.WriteLine(from y in new A() select [|(long)0|]);
+        Console.WriteLine(from y in new A()
+                          select [|(long)0|]);
     }
-}
-");
+}");
         }
 
         [WorkItem(545848, "http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/545848")]
@@ -1352,22 +1366,37 @@ class A
         public async Task DontRemoveNecessaryCastInConstructorInitializer()
         {
             await TestMissingAsync(
-            @"
-using System;
+@"using System;
 
 class C
 {
-    static void Foo(int x, Func<int, int> y) { }
-    static void Foo(string x, Func<string, string> y) { }
+    static void Foo(int x, Func<int, int> y)
+    {
+    }
 
-    C(Action<int> x, object y) { Console.WriteLine(1); }
-    C(Action<string> x, string y) { Console.WriteLine(2); }
+    static void Foo(string x, Func<string, string> y)
+    {
+    }
 
-    C() : this(x => Foo(x, y => [|(int)x|]), null) { }
+    C(Action<int> x, object y)
+    {
+        Console.WriteLine(1);
+    }
 
-    static void Main() { new C(); }
-}
-");
+    C(Action<string> x, string y)
+    {
+        Console.WriteLine(2);
+    }
+
+    C() : this(x => Foo(x, y => [|(int)x|]), null)
+    {
+    }
+
+    static void Main()
+    {
+        new C();
+    }
+}");
         }
 
         [WorkItem(529831, "http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/529831")]
@@ -1375,25 +1404,33 @@ class C
         public async Task DontRemoveNecessaryCastFromTypeParameterToInterface()
         {
             await TestMissingAsync(
-            @"
-using System;
+@"using System;
 
 interface IIncrementable
 {
     int Value { get; }
+
     void Increment();
 }
 
 struct S : IIncrementable
 {
     public int Value { get; private set; }
-    public void Increment() { Value++; }
+
+    public void Increment()
+    {
+        Value++;
+    }
 }
 
-class C: IIncrementable
+class C : IIncrementable
 {
     public int Value { get; private set; }
-    public void Increment() { Value++; }
+
+    public void Increment()
+    {
+        Value++;
+    }
 }
 
 static class Program
@@ -1403,7 +1440,7 @@ static class Program
         Foo(new S(), new C());
     }
 
-    static void Foo<TAny, TClass>(TAny x, TClass y) 
+    static void Foo<TAny, TClass>(TAny x, TClass y)
         where TAny : IIncrementable
         where TClass : class, IIncrementable
     {
@@ -1413,8 +1450,7 @@ static class Program
         Console.WriteLine(x.Value);
         Console.WriteLine(y.Value);
     }
-}
-");
+}");
         }
 
         [WorkItem(529831, "http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/529831")]
@@ -1511,8 +1547,7 @@ static class Program
         public async Task DontCrashOnIncompleteMethodDeclaration()
         {
             await TestMissingAsync(
-            @"
-using System;
+@"using System;
 
 class A
 {
@@ -1522,9 +1557,10 @@ class A
         Foo(x => 1, [|(byte)1|]);
     }
 
-    static void Foo<T, S>(T x, ) { }
-}
-");
+    static void Foo<T, S>(T x, )
+    {
+    }
+}");
         }
 
         [WorkItem(545777, "http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/545777")]
@@ -1660,15 +1696,15 @@ class Program
         public async Task DontRemoveNecessaryCastFromTypeParameterToObject()
         {
             await TestMissingAsync(
-            @"
-class C
+@"class C
 {
     static void Foo<T>(T x, object y)
     {
-        if ([|(object)x|] == y) { }
+        if ([|(object)x|] == y)
+        {
+        }
     }
-}
-");
+}");
         }
 
         [WorkItem(545858, "http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/545858")]
@@ -1676,8 +1712,7 @@ class C
         public async Task DontRemoveNecessaryCastFromDelegateTypeToMulticastDelegate()
         {
             await TestMissingAsync(
-            @"
-using System;
+@"using System;
 
 class C
 {
@@ -1687,8 +1722,7 @@ class C
         Action y = Console.WriteLine;
         Console.WriteLine([|(MulticastDelegate)x|] == y);
     }
-}
-");
+}");
         }
 
         [WorkItem(545857, "http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/545857")]
@@ -1699,8 +1733,7 @@ class C
             // conversion to int being called instead.
 
             await TestMissingAsync(
-            @"
-using System;
+@"using System;
 
 class C
 {
@@ -1709,17 +1742,16 @@ class C
         Console.WriteLine(new int[[|(long)default(C)|]].Length);
     }
 
-    public static implicit operator long (C x)
+    public static implicit operator long(C x)
     {
         return 1;
     }
 
-    public static implicit operator int (C x)
+    public static implicit operator int(C x)
     {
         return 2;
     }
-}
-");
+}");
         }
 
         [WorkItem(545980, "http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/545980")]
@@ -1729,15 +1761,13 @@ class C
             // Array bounds must be an int, so the cast below can't be removed.
 
             await TestMissingAsync(
-            @"
-class C
+@"class C
 {
     static void Main()
     {
         var a = new int[[|(int)decimal.Zero|]];
     }
-}
-");
+}");
         }
 
         [WorkItem(529842, "http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/529842")]
@@ -1745,12 +1775,11 @@ class C
         public async Task DontRemoveNecessaryCastInTernaryExpression()
         {
             await TestMissingAsync(
-            @"
-using System;
+@"using System;
 
 class X
 {
-    public static implicit operator string (X x)
+    public static implicit operator string(X x)
     {
         return x.ToString();
     }
@@ -1761,8 +1790,7 @@ class X
         X x = new X();
         Console.WriteLine(b ? [|(string)null|] : x);
     }
-}
-");
+}");
         }
 
         [WorkItem(545882, "http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/545882"), WorkItem(880752, "http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/880752")]
@@ -1824,13 +1852,16 @@ class C
         public async Task DontRemoveCastInConstructorInitializer3()
         {
             await TestMissingAsync(
-@"
-class C
+@"class C
 {
-    C(int x) { }
-    C() : this([|(long)1|]) { }
-}
-");
+    C(int x)
+    {
+    }
+
+    C() : this([|(long)1|])
+    {
+    }
+}");
         }
 
         [WorkItem(545842, "http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/545842")]
@@ -1873,8 +1904,7 @@ static class C
             // illegal reference equality test between object and a value type.
 
             await TestMissingAsync(
-            @"
-using System;
+@"using System;
 
 class Program
 {
@@ -1883,8 +1913,7 @@ class Program
         object x = 1;
         Console.WriteLine(x == [|(object)1|]);
     }
-}
-");
+}");
         }
 
         [WorkItem(545962, "http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/545962")]
@@ -1894,18 +1923,15 @@ class Program
             // Note: The cast below can't be removed because its expression doesn't bind.
 
             await TestMissingAsync(
-            @"
-using System;
- 
+@"using System;
+
 class Program
 {
     static void Main()
     {
         ([|(IDisposable)x|]).Dispose();
     }
-}
-
-");
+}");
         }
 
         [WorkItem(545944, "http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/545944")]
@@ -1916,12 +1942,10 @@ class Program
             // which is illegal.
 
             await TestMissingAsync(
-            @"
-unsafe class C
+@"unsafe class C
 {
     int x = *[|(int*)null|];
-}
-");
+}");
         }
 
         [WorkItem(545978, "http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/545978")]
@@ -1932,16 +1956,14 @@ unsafe class C
             // void*, which is illegal.
 
             await TestMissingAsync(
-            @"
-unsafe class C
+@"unsafe class C
 {
     static void Main()
     {
         void* p = null;
         int x = *[|(int*)p|];
     }
-}
-");
+}");
         }
 
         [WorkItem(2691, "https://github.com/dotnet/roslyn/issues/2691")]
@@ -1953,15 +1975,13 @@ unsafe class C
             // https://github.com/dotnet/roslyn/issues/2987 tracks improving cast simplification for this scenario.
 
             await TestMissingAsync(
-            @"
-class C
+@"class C
 {
     public unsafe float ReadSingle(byte* ptr)
     {
         return *[|(float*)ptr|];
     }
-}
-");
+}");
         }
 
         [WorkItem(2691, "https://github.com/dotnet/roslyn/issues/2691")]
@@ -1973,8 +1993,7 @@ class C
             // https://github.com/dotnet/roslyn/issues/2987 tracks improving cast simplification for this scenario.
 
             await TestMissingAsync(
-            @"
-class C
+@"class C
 {
     private unsafe readonly byte* _endPointer;
     private unsafe byte* _currentPointer;
@@ -1985,8 +2004,7 @@ class C
         {
         }
     }
-}
-");
+}");
         }
 
         [WorkItem(2691, "https://github.com/dotnet/roslyn/issues/2691")]
@@ -1998,8 +2016,7 @@ class C
             // https://github.com/dotnet/roslyn/issues/2987 tracks improving cast simplification for this scenario.
 
             await TestMissingAsync(
-            @"
-class C
+@"class C
 {
     private unsafe readonly byte* _endPointer;
     private unsafe byte* _currentPointer;
@@ -2013,8 +2030,7 @@ class C
             }
         }
     }
-}
-");
+}");
         }
 
         [WorkItem(2691, "https://github.com/dotnet/roslyn/issues/2691")]
@@ -2026,8 +2042,7 @@ class C
             // https://github.com/dotnet/roslyn/issues/2987 tracks improving cast simplification for this scenario.
 
             await TestMissingAsync(
-            @"
-class C
+@"class C
 {
     private unsafe readonly byte* _endPointer;
     private unsafe byte* _currentPointer;
@@ -2038,8 +2053,7 @@ class C
         {
         }
     }
-}
-");
+}");
         }
 
         [WorkItem(2691, "https://github.com/dotnet/roslyn/issues/2691")]
@@ -2051,8 +2065,7 @@ class C
             // https://github.com/dotnet/roslyn/issues/2987 tracks improving cast simplification for this scenario.
 
             await TestMissingAsync(
-            @"
-class C
+@"class C
 {
     private unsafe readonly byte* _endPointer;
     private unsafe byte* _currentPointer;
@@ -2066,8 +2079,7 @@ class C
             }
         }
     }
-}
-");
+}");
         }
 
         [WorkItem(545894, "http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/545894")]
@@ -2075,15 +2087,15 @@ class C
         public async Task DontRemoveNecessaryCastInAttribute()
         {
             await TestMissingAsync(
-            @"
-using System;
+@"using System;
 
 [A([|(byte)0)|]]
 class A : Attribute
 {
-    public A(object x) {  }
-}
-");
+    public A(object x)
+    {
+    }
+}");
         }
 
         #region Interface Casts
@@ -2095,8 +2107,7 @@ class A : Attribute
             // Note: The cast below can't be removed because X is not sealed.
 
             await TestMissingAsync(
-            @"
-using System;
+@"using System;
 
 class X : IDisposable
 {
@@ -2105,6 +2116,7 @@ class X : IDisposable
         X x = new Y();
         ([|(IDisposable)x|]).Dispose();
     }
+
     public void Dispose()
     {
         Console.WriteLine(""X.Dispose"");
@@ -2117,8 +2129,7 @@ class Y : X, IDisposable
     {
         Console.WriteLine(""Y.Dispose"");
     }
-}
-");
+}");
         }
 
         [WorkItem(545890, "http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/545890")]
@@ -2311,8 +2322,7 @@ sealed class C : I
             // because the unspecified optional parameter default values differ.
 
             await TestMissingAsync(
-            @"
-using System;
+@"using System;
 
 interface I
 {
@@ -2330,8 +2340,7 @@ sealed class C : I
     {
         ([|(I)new C()|]).Foo();
     }
-}
-");
+}");
         }
 
         [WorkItem(545890, "http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/545890")]
@@ -2399,8 +2408,7 @@ sealed class C : I
             // appear at different positions in the member signatures.
 
             await TestMissingAsync(
-            @"
-using System;
+@"using System;
 
 interface I
 {
@@ -2418,8 +2426,7 @@ sealed class C : I
     {
         ([|(I)new C()|]).Foo(x: 1);
     }
-}
-");
+}");
         }
 
         [WorkItem(545888, "http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/545888")]
@@ -2489,8 +2496,7 @@ sealed class C : I
             // appear at different positions in the member signatures.
 
             await TestMissingAsync(
-            @"
-using System;
+@"using System;
 
 interface I
 {
@@ -2511,8 +2517,7 @@ sealed class C : I
     {
         Console.WriteLine(([|(I)new C()|])[x: 1]);
     }
-}
-");
+}");
         }
 
         [WorkItem(545883, "http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/545883")]
@@ -2524,8 +2529,7 @@ sealed class C : I
             // implement IDisposable.Dispose().
 
             await TestMissingAsync(
-            @"
-using System;
+@"using System;
 using System.IO;
 
 sealed class C : MemoryStream
@@ -2540,8 +2544,7 @@ sealed class C : MemoryStream
     {
         Console.WriteLine(""new Dispose()"");
     }
-}
-");
+}");
         }
 
         [WorkItem(545887, "http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/545887")]
@@ -2552,19 +2555,23 @@ sealed class C : MemoryStream
             // unboxing would change program behavior.
 
             await TestMissingAsync(
-            @"
-using System;
+@"using System;
 
 interface IIncrementable
 {
     int Value { get; }
+
     void Increment();
 }
 
 struct S : IIncrementable
 {
     public int Value { get; private set; }
-    public void Increment() { Value++; }
+
+    public void Increment()
+    {
+        Value++;
+    }
 
     static void Main()
     {
@@ -2572,8 +2579,7 @@ struct S : IIncrementable
         ([|(IIncrementable)s|]).Increment();
         Console.WriteLine(s.Value);
     }
-}
-");
+}");
         }
 
         [WorkItem(545834, "http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/545834")]
@@ -2745,8 +2751,7 @@ class Program
         public async Task DontRemoveCastToObjectInParamArrayArg1()
         {
             await TestMissingAsync(
-            @"
-using System;
+@"using System;
 
 class C
 {
@@ -2759,8 +2764,7 @@ class C
     {
         Console.WriteLine(x.Length);
     }
-}
-");
+}");
         }
 
         [WorkItem(529911, "http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/529911")]
@@ -2768,8 +2772,7 @@ class C
         public async Task DontRemoveCastToIntArrayInParamArrayArg2()
         {
             await TestMissingAsync(
-            @"
-using System;
+@"using System;
 
 class C
 {
@@ -2782,8 +2785,7 @@ class C
     {
         Console.WriteLine(x.Length);
     }
-}
-");
+}");
         }
 
         [WorkItem(529911, "http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/529911")]
@@ -2791,8 +2793,7 @@ class C
         public async Task DontRemoveCastToObjectArrayInParamArrayArg3()
         {
             await TestMissingAsync(
-            @"
-using System;
+@"using System;
 
 class C
 {
@@ -2805,8 +2806,7 @@ class C
     {
         Console.WriteLine(x.Length);
     }
-}
-");
+}");
         }
 
         [WorkItem(529911, "http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/529911")]
@@ -3011,18 +3011,18 @@ class C
             // in the foreach statement.
 
             await TestMissingAsync(
-            @"
-using System.Collections;
+@"using System.Collections;
 
 class Program
 {
     static void Main()
     {
         object s = "";
-        foreach (object x in [|(IEnumerable)s|]) { }
+        foreach (object x in [|(IEnumerable)s|])
+        {
+        }
     }
-}
-");
+}");
         }
 
         [WorkItem(545961, "http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/545961")]
@@ -3033,18 +3033,18 @@ class Program
             // in the foreach statement.
 
             await TestMissingAsync(
-            @"
-using System.Collections.Generic;
+@"using System.Collections.Generic;
 
 class Program
 {
     static void Main()
     {
         object s = "";
-        foreach (object x in [|(IEnumerable<char>)s|]) { }
+        foreach (object x in [|(IEnumerable<char>)s|])
+        {
+        }
     }
-}
-");
+}");
         }
 
         [WorkItem(545961, "http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/545961")]
@@ -3056,8 +3056,7 @@ class Program
             // method.
 
             await TestMissingAsync(
-            @"
-using System.Collections;
+@"using System.Collections;
 
 class D
 {
@@ -3077,7 +3076,9 @@ class C
     static void Main()
     {
         object s = "";
-        foreach (object x in [|(D)new C()|]) { }
+        foreach (object x in [|(D)new C()|])
+        {
+        }
     }
 }");
         }
@@ -3090,8 +3091,7 @@ class C
             // C.GetEnumerator() being called rather than D.GetEnumerator().
 
             await TestMissingAsync(
-            @"
-using System;
+@"using System;
 using System.Collections;
 
 class D
@@ -3133,22 +3133,22 @@ class C
             // type of 'x'.
 
             await TestMissingAsync(
-            @"
-using System;
- 
+@"using System;
+
 class Program
 {
     static void Main()
     {
-        string[] s = { ""A"" };
+        string[] s = {
+            ""A""
+        };
         foreach (var x in [|(Array)s|])
         {
             var y = x;
             y = 1;
         }
     }
-}
-");
+}");
         }
 
         #endregion
@@ -3161,8 +3161,7 @@ class Program
             // of Foo and its override have different default values.
 
             await TestMissingAsync(
-            @"
-using System;
+@"using System;
 
 abstract class Y
 {
@@ -3180,8 +3179,7 @@ class X : Y
     {
         Console.WriteLine(x);
     }
-}
-");
+}");
         }
 
         [WorkItem(545925, "http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/545925")]
@@ -3283,25 +3281,22 @@ static class Program
         public async Task Bugfix_609497()
         {
             await TestMissingAsync(
-@"
-using System;
+@"using System;
 using System.Threading.Tasks;
- 
+
 class Program
 {
     static void Main()
     {
         Foo().Wait();
     }
- 
+
     static async Task Foo()
     {
         Task task = Task.FromResult(0);
         Console.WriteLine(await [|(dynamic)task|]);
     }
-}
-
-");
+}");
         }
 
         [WorkItem(545995, "http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/545995")]
@@ -3312,8 +3307,7 @@ class Program
             // a different overload being picked.
 
             await TestMissingAsync(
-@"
-using System;
+@"using System;
 using MyInt = System.Int32;
 
 namespace System
@@ -3329,14 +3323,21 @@ namespace System
 
 class A
 {
-    static void Foo(int x) { Console.WriteLine(""int""); }
-    static void Foo(MyInt x) { Console.WriteLine(""MyInt""); }
+    static void Foo(int x)
+    {
+        Console.WriteLine(""int"");
+    }
+
+    static void Foo(MyInt x)
+    {
+        Console.WriteLine(""MyInt"");
+    }
+
     static void Main()
     {
         Foo([|(MyInt)0|]);
     }
-}
-");
+}");
         }
 
         [WorkItem(545921, "http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/545921")]
@@ -3347,8 +3348,7 @@ class A
             // a different attribute constructor being picked
 
             await TestMissingAsync(
-@"
-using System;
+@"using System;
 
 [Flags]
 enum EEEnum
@@ -3359,19 +3359,28 @@ enum EEEnum
 
 class MyAttributeAttribute : Attribute
 {
-    public MyAttributeAttribute(EEEnum e) { }
-    public MyAttributeAttribute(short e) { }
- 
-    public void Foo(EEEnum e) { }
-    public void Foo(short e) { }
- 
+    public MyAttributeAttribute(EEEnum e)
+    {
+    }
+
+    public MyAttributeAttribute(short e)
+    {
+    }
+
+    public void Foo(EEEnum e)
+    {
+    }
+
+    public void Foo(short e)
+    {
+    }
+
     [MyAttribute([|(EEEnum)0x0|])]
     public void Bar()
     {
         Foo((EEEnum)0x0);
     }
-}
-");
+}");
         }
 
         [WorkItem(608180, "http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/608180")]
@@ -3380,14 +3389,12 @@ class MyAttributeAttribute : Attribute
         public async Task DontRemoveCastIfArgumentIsRestricted_TypedReference()
         {
             await TestMissingAsync(
-@"
-using System;
+@"using System;
 
 class Program
 {
     static void Main(string[] args)
     {
-        
     }
 
     static void v(dynamic x)
@@ -3398,10 +3405,8 @@ class Program
 
     static void dd(object obj, TypedReference d)
     {
-
     }
-}
-");
+}");
         }
 
         [WorkItem(627107, "http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/627107")]
@@ -3409,9 +3414,8 @@ class Program
         public async Task DontRemoveCastOnArgumentsWithOtherDynamicArguments()
         {
             await TestMissingAsync(
-@"
-using System;
- 
+@"using System;
+
 class Program
 {
     static void Main()
@@ -3419,19 +3423,23 @@ class Program
         C<string>.InvokeFoo(0);
     }
 }
- 
+
 class C<T>
 {
     public static void InvokeFoo(dynamic x)
     {
         Console.WriteLine(Foo(x, [|(object)""""|], """"));
     }
- 
-    static void Foo(int x, string y, T z) { }
-    static bool Foo(int x, object y, object z) { return true; }
-}
 
-");
+    static void Foo(int x, string y, T z)
+    {
+    }
+
+    static bool Foo(int x, object y, object z)
+    {
+        return true;
+    }
+}");
         }
 
         [WorkItem(627107, "http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/627107")]
@@ -3439,19 +3447,37 @@ class C<T>
         public async Task DontRemoveCastOnArgumentsWithOtherDynamicArguments_Bracketed()
         {
             await TestMissingAsync(
-@"
-class C<T>
+@"class C<T>
 {
-    int this[int x, T s, string d = ""abc""] { get { return 0; } set { } }
+    int this[int x, T s, string d = ""abc""]
+    {
+        get
+        {
+            return 0;
+        }
 
-    int this[int x, object s, object d] { get { return 0; } set { } }
+        set
+        {
+        }
+    }
+
+    int this[int x, object s, object d]
+    {
+        get
+        {
+            return 0;
+        }
+
+        set
+        {
+        }
+    }
 
     void Foo(dynamic xx)
     {
-        var y = this[ x: xx, s: """", d: [|(object)""""|]];
+        var y = this[x: xx, s: """", d: [|(object)""""|]];
     }
-}
-");
+}");
         }
 
         [WorkItem(627107, "http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/627107")]
@@ -3459,16 +3485,14 @@ class C<T>
         public async Task DontRemoveCastOnArgumentsWithDynamicReceiverOpt()
         {
             await TestMissingAsync(
-@"
-class C
+@"class C
 {
     static bool Foo(dynamic d)
     {
         d([|(object)""""|]);
         return true;
     }
-}
-");
+}");
         }
 
         [WorkItem(627107, "http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/627107")]
@@ -3476,16 +3500,14 @@ class C
         public async Task DontRemoveCastOnArgumentsWithDynamicReceiverOpt_1()
         {
             await TestMissingAsync(
-@"
-class C
+@"class C
 {
     static bool Foo(dynamic d)
     {
         d.foo([|(object)""""|]);
         return true;
     }
-}
-");
+}");
         }
 
         [WorkItem(627107, "http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/627107")]
@@ -3493,16 +3515,14 @@ class C
         public async Task DontRemoveCastOnArgumentsWithDynamicReceiverOpt_2()
         {
             await TestMissingAsync(
-@"
-class C
+@"class C
 {
     static bool Foo(dynamic d)
     {
         d.foo.bar.foo([|(object)""""|]);
         return true;
     }
-}
-");
+}");
         }
 
         [WorkItem(627107, "http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/627107")]
@@ -3510,16 +3530,14 @@ class C
         public async Task DontRemoveCastOnArgumentsWithDynamicReceiverOpt_3()
         {
             await TestMissingAsync(
-@"
-class C
+@"class C
 {
     static bool Foo(dynamic d)
     {
         d.foo().bar().foo([|(object)""""|]);
         return true;
     }
-}
-");
+}");
         }
 
         [WorkItem(627107, "http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/627107")]
@@ -3527,9 +3545,8 @@ class C
         public async Task DontRemoveCastOnArgumentsWithOtherDynamicArguments_1()
         {
             await TestMissingAsync(
-@"
-using System;
- 
+@"using System;
+
 class Program
 {
     static void Main()
@@ -3545,11 +3562,15 @@ class C<T>
         Console.WriteLine(Foo([|(object)""""|], x, """"));
     }
 
-    static void Foo(string y, int x,  T z) { }
-    static bool Foo(object y, int x,  object z) { return true; }
-}
+    static void Foo(string y, int x, T z)
+    {
+    }
 
-");
+    static bool Foo(object y, int x, object z)
+    {
+        return true;
+    }
+}");
         }
 
         [WorkItem(545998, "http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/545998")]
@@ -3560,15 +3581,15 @@ class C<T>
             // a different attribute constructor being picked
 
             await TestMissingAsync(
-@"
-using System;
- 
+@"using System;
+
 [A(new[] { [|(long)0|] })]
 class A : Attribute
 {
-    public A(long[] x) { }
-}
-");
+    public A(long[] x)
+    {
+    }
+}");
         }
 
         [WorkItem(529894, "http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/529894")]
@@ -3576,8 +3597,7 @@ class A : Attribute
         public async Task DontUnnecessaryCastFromEnumToUint()
         {
             await TestMissingAsync(
-@"
-using System;
+@"using System;
 
 enum E
 {
@@ -3591,8 +3611,7 @@ class C
         E x = E.X;
         Console.WriteLine([|(uint)|]x > 0);
     }
-}
-");
+}");
         }
 
         [WorkItem(529846, "http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/529846")]
@@ -3600,16 +3619,15 @@ class C
         public async Task DontUnnecessaryCastFromTypeParameterToObject()
         {
             await TestMissingAsync(
-@"
-class C
+@"class C
 {
     static void Foo<T>(T x, object y)
     {
-        if ([|(object)|]x == y) { }
+        if ([|(object)|]x == y)
+        {
+        }
     }
-}
-
-");
+}");
         }
 
         [WorkItem(640136, "http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/640136")]
@@ -3651,8 +3669,7 @@ class C
         public async Task DontRemoveCastIfUserDefinedExplicitCast()
         {
             await TestMissingAsync(
-            @"
-class Program
+@"class Program
 {
     static void Main(string[] args)
     {
@@ -3671,9 +3688,7 @@ public struct A
 
 public struct B
 {
-
-}
-");
+}");
         }
 
         [WorkItem(768895, "http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/768895")]
@@ -3681,16 +3696,14 @@ public struct B
         public async Task DontRemoveNecessaryCastInTernary()
         {
             await TestMissingAsync(
-            @"
-class Program
+@"class Program
 {
     static void Main(string[] args)
     {
         object x = null;
         int y = [|(bool)x|] ? 1 : 0;
     }
-}
-");
+}");
         }
 
         [WorkItem(770187, "http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/770187")]
@@ -3698,8 +3711,7 @@ class Program
         public async Task DontRemoveNecessaryCastInSwitchExpression()
         {
             await TestMissingAsync(
-            @"
-namespace ConsoleApplication23
+@"namespace ConsoleApplication23
 {
     class Program
     {
@@ -3714,14 +3726,14 @@ namespace ConsoleApplication23
             }
         }
     }
+
     enum E
     {
         A,
         B,
         C
     }
-}
-");
+}");
         }
 
         [WorkItem(844482, "http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/844482")]
@@ -3742,12 +3754,10 @@ namespace ConsoleApplication23
 
 class C
 {
-
 }
 
 class D : C
 {
-
 }");
         }
 
@@ -3760,8 +3770,7 @@ class D : C
 
 class Program
 {
-    private static void RequiresCondition<TException>(bool condition, string messageOnFalseCondition)
-            where TException : Exception
+    private static void RequiresCondition<TException>(bool condition, string messageOnFalseCondition) where TException : Exception
     {
         if (!condition)
         {
@@ -3780,12 +3789,144 @@ class Program
 
 class Program
 {
-    private static void RequiresCondition<TException>(bool condition, string messageOnFalseCondition)
-            where TException : ArgumentException
+    private static void RequiresCondition<TException>(bool condition, string messageOnFalseCondition) where TException : ArgumentException
     {
         if (!condition)
         {
             throw [|(TException)Activator.CreateInstance(typeof(TException), messageOnFalseCondition)|];
+        }
+    }
+}");
+        }
+
+        [WorkItem(8111, "https://github.com/dotnet/roslyn/issues/8111")]
+        [Fact, Trait(Traits.Feature, Traits.Features.CodeActionsRemoveUnnecessaryCast)]
+        public async Task DontRemoveCastThatChangesShapeOfAnonymousTypeObject()
+        {
+            await TestMissingAsync(
+@"class Program
+{
+    static void Main(string[] args)
+    {
+        object thing = new { shouldBeAnInt = [|(int)Directions.South|] };
+    }
+
+    public enum Directions
+    {
+        North,
+        East,
+        South,
+        West
+    }
+}");
+        }
+
+        [WorkItem(8111, "https://github.com/dotnet/roslyn/issues/8111")]
+        [Fact, Trait(Traits.Feature, Traits.Features.CodeActionsRemoveUnnecessaryCast)]
+        public async Task RemoveCastThatDoesntChangeShapeOfAnonymousTypeObject()
+        {
+            await TestAsync(
+@"class Program
+{
+    static void Main(string[] args)
+    {
+        object thing = new { shouldBeAnInt = [|(Directions)Directions.South|] };
+    }
+
+    public enum Directions
+    {
+        North,
+        East,
+        South,
+        West
+    }
+}",
+
+@"class Program
+{
+    static void Main(string[] args)
+    {
+        object thing = new { shouldBeAnInt = Directions.South };
+    }
+
+    public enum Directions
+    {
+        North,
+        East,
+        South,
+        West
+    }
+}");
+        }
+
+        [Fact, Trait(Traits.Feature, Traits.Features.CodeActionsRemoveUnnecessaryCast)]
+        public async Task Tuple()
+        {
+            await TestAsync(
+@"class C
+{
+    void Main()
+    {
+        (int, string) tuple = [|((int, string))(1, ""hello"")|];
+    }
+}",
+@"class C
+{
+    void Main()
+    {
+        (int, string) tuple = (1, ""hello"");
+    }
+}",
+            parseOptions: TestOptions.Regular,
+            withScriptOption: true);
+        }
+
+        [Fact, Trait(Traits.Feature, Traits.Features.CodeActionsRemoveUnnecessaryCast)]
+        public async Task TupleWithDifferentNames()
+        {
+            await TestAsync(
+@"class C
+{
+    void Main()
+    {
+        (int a, string) tuple = [|((int, string d))(1, f: ""hello"")|];
+    }
+}",
+@"class C
+{
+    void Main()
+    {
+        (int a, string) tuple = (1, f: ""hello"");
+    }
+}",
+            parseOptions: TestOptions.Regular,
+            withScriptOption: true);
+        }
+
+        [WorkItem(12572, "https://github.com/dotnet/roslyn/issues/12572")]
+        [Fact, Trait(Traits.Feature, Traits.Features.CodeActionsRemoveUnnecessaryCast)]
+        public async Task DontRemoveCastThatUnboxes()
+        {
+            // The cast below can't be removed because it could throw a null ref exception.
+            await TestMissingAsync(
+@"using System;
+
+class Program
+{
+    static void Main()
+    {
+        object i = null;
+        switch ([|(int)i|])
+        {
+            case 0:
+                Console.WriteLine(0);
+                break;
+            case 1:
+                Console.WriteLine(1);
+                break;
+            case 2:
+                Console.WriteLine(2);
+                break;
         }
     }
 }");

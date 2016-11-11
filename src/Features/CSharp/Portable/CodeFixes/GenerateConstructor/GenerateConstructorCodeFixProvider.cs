@@ -12,6 +12,7 @@ using Microsoft.CodeAnalysis.CSharp.Extensions;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.GenerateMember.GenerateConstructor;
 using Microsoft.CodeAnalysis.Shared.Extensions;
+using Microsoft.CodeAnalysis.Text;
 
 namespace Microsoft.CodeAnalysis.CSharp.CodeFixes.GenerateConstructor
 {
@@ -30,23 +31,35 @@ namespace Microsoft.CodeAnalysis.CSharp.CodeFixes.GenerateConstructor
             get { return ImmutableArray.Create(CS0122, CS1729, CS1739, CS1503, CS7036); }
         }
 
-        protected override Task<IEnumerable<CodeAction>> GetCodeActionsAsync(Document document, SyntaxNode node, CancellationToken cancellationToken)
+        protected override Task<ImmutableArray<CodeAction>> GetCodeActionsAsync(
+            Document document, SyntaxNode node, CancellationToken cancellationToken)
         {
             var service = document.GetLanguageService<IGenerateConstructorService>();
             return service.GenerateConstructorAsync(document, node, cancellationToken);
         }
 
-        protected override bool IsCandidate(SyntaxNode node, Diagnostic diagnostic)
+        protected override bool IsCandidate(SyntaxNode node, SyntaxToken token, Diagnostic diagnostic)
         {
-            if (node is SimpleNameSyntax ||
-                node is ObjectCreationExpressionSyntax ||
+            if (node is ObjectCreationExpressionSyntax ||
                 node is ConstructorInitializerSyntax ||
                 node is AttributeSyntax)
             {
                 return true;
             }
 
-            return diagnostic.Id == CS7036 && node is ClassDeclarationSyntax;
+            return diagnostic.Id == CS7036 && 
+                node is ClassDeclarationSyntax && 
+                IsInClassDeclarationHeader((ClassDeclarationSyntax)node, token);
+        }
+
+        private bool IsInClassDeclarationHeader(ClassDeclarationSyntax node, SyntaxToken token)
+        {
+            var start = node.SpanStart;
+            var end = node.BaseList != null
+                ? node.BaseList.Span.End
+                : node.Identifier.Span.End;
+
+            return TextSpan.FromBounds(start, end).Contains(token.Span);
         }
 
         protected override SyntaxNode GetTargetNode(SyntaxNode node)

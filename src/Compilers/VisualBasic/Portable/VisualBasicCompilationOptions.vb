@@ -114,6 +114,7 @@ Namespace Microsoft.CodeAnalysis.VisualBasic
                 specificDiagnosticOptions,
                 concurrentBuild,
                 deterministic:=deterministic,
+                currentLocalTime:=Nothing,
                 suppressEmbeddedDeclarations:=False,
                 extendedCustomDebugInformation:=True,
                 debugPlusMode:=False,
@@ -153,6 +154,7 @@ Namespace Microsoft.CodeAnalysis.VisualBasic
             specificDiagnosticOptions As IEnumerable(Of KeyValuePair(Of String, ReportDiagnostic)),
             concurrentBuild As Boolean,
             deterministic As Boolean,
+            currentLocalTime As Date,
             suppressEmbeddedDeclarations As Boolean,
             extendedCustomDebugInformation As Boolean,
             debugPlusMode As Boolean,
@@ -183,6 +185,7 @@ Namespace Microsoft.CodeAnalysis.VisualBasic
                 specificDiagnosticOptions:=specificDiagnosticOptions.ToImmutableDictionaryOrEmpty(CaseInsensitiveComparison.Comparer), ' Diagnostic ids must be processed in case-insensitive fashion.
                 concurrentBuild:=concurrentBuild,
                 deterministic:=deterministic,
+                currentLocalTime:=currentLocalTime,
                 extendedCustomDebugInformation:=extendedCustomDebugInformation,
                 debugPlusMode:=debugPlusMode,
                 xmlReferenceResolver:=xmlReferenceResolver,
@@ -211,7 +214,7 @@ Namespace Microsoft.CodeAnalysis.VisualBasic
             MyClass.New(
                 outputKind:=other.OutputKind,
                 reportSuppressedDiagnostics:=other.ReportSuppressedDiagnostics,
-                ModuleName:=other.ModuleName,
+                moduleName:=other.ModuleName,
                 mainTypeName:=other.MainTypeName,
                 scriptClassName:=other.ScriptClassName,
                 globalImports:=other.GlobalImports,
@@ -234,6 +237,7 @@ Namespace Microsoft.CodeAnalysis.VisualBasic
                 specificDiagnosticOptions:=other.SpecificDiagnosticOptions,
                 concurrentBuild:=other.ConcurrentBuild,
                 deterministic:=other.Deterministic,
+                currentLocalTime:=other.CurrentLocalTime,
                 extendedCustomDebugInformation:=other.ExtendedCustomDebugInformation,
                 debugPlusMode:=other.DebugPlusMode,
                 xmlReferenceResolver:=other.XmlReferenceResolver,
@@ -245,6 +249,12 @@ Namespace Microsoft.CodeAnalysis.VisualBasic
                 referencesSupersedeLowerVersions:=other.ReferencesSupersedeLowerVersions,
                 publicSign:=other.PublicSign)
         End Sub
+
+        Public Overrides ReadOnly Property Language As String
+            Get
+                Return LanguageNames.VisualBasic
+            End Get
+        End Property
 
         Friend Overrides Function GetImports() As ImmutableArray(Of String)
             ' TODO: implement (only called from VBI) https://github.com/dotnet/roslyn/issues/5854
@@ -358,7 +368,7 @@ Namespace Microsoft.CodeAnalysis.VisualBasic
         ''' Compilation level parse options.  Used when compiling synthetic embedded code such as My template
         ''' </summary>
         ''' <returns>The Parse Options Setting.</returns>
-        Friend ReadOnly Property ParseOptions As VisualBasicParseOptions
+        Public ReadOnly Property ParseOptions As VisualBasicParseOptions
             Get
                 Return _parseOptions
             End Get
@@ -382,7 +392,7 @@ Namespace Microsoft.CodeAnalysis.VisualBasic
         ''' </summary>
         ''' <param name="moduleName">The moduleName.</param>        
         ''' <returns>A new instance of VisualBasicCompilationOptions, if the module name is different; otherwise current instance.</returns>        
-        Public Function WithModuleName(moduleName As String) As VisualBasicCompilationOptions
+        Public Shadows Function WithModuleName(moduleName As String) As VisualBasicCompilationOptions
             If String.Equals(moduleName, Me.ModuleName, StringComparison.Ordinal) Then
                 Return Me
             End If
@@ -554,7 +564,7 @@ Namespace Microsoft.CodeAnalysis.VisualBasic
         ''' <summary>
         ''' Creates a new VisualBasicCompilationOptions instance with a different deterministic mode specified.
         ''' <param name="deterministic"> The deterministic mode. </param>
-        ''' <returns> A new instance of VisualBasicCompilationOptions, if the concurrent build is different; otherwise the current instance.</returns>
+        ''' <returns> A new instance of VisualBasicCompilationOptions, if the deterministic mode is different; otherwise the current instance.</returns>
         ''' </summary>
         Public Shadows Function WithDeterministic(deterministic As Boolean) As VisualBasicCompilationOptions
             If deterministic = Me.Deterministic Then
@@ -562,6 +572,14 @@ Namespace Microsoft.CodeAnalysis.VisualBasic
             End If
 
             Return New VisualBasicCompilationOptions(Me) With {.Deterministic = deterministic}
+        End Function
+
+        Friend Function WithCurrentLocalTime(value As Date) As VisualBasicCompilationOptions
+            If value.Equals(CurrentLocalTime) Then
+                Return Me
+            End If
+
+            Return New VisualBasicCompilationOptions(Me) With {.CurrentLocalTime_internal_protected_set = value}
         End Function
 
         ''' <summary>
@@ -679,6 +697,10 @@ Namespace Microsoft.CodeAnalysis.VisualBasic
             End If
 
             Return New VisualBasicCompilationOptions(Me) With {.PublicSign = value}
+        End Function
+
+        Protected Overrides Function CommonWithConcurrentBuild(concurrent As Boolean) As CompilationOptions
+            Return Me.WithConcurrentBuild(concurrent)
         End Function
 
         Protected Overrides Function CommonWithDeterministic(deterministic As Boolean) As CompilationOptions
@@ -878,6 +900,8 @@ Namespace Microsoft.CodeAnalysis.VisualBasic
         End Function
 
         Friend Overrides Sub ValidateOptions(builder As ArrayBuilder(Of Diagnostic))
+            ValidateOptions(builder, MessageProvider.Instance)
+
             If Me.EmbedVbCoreRuntime AndAlso Me.OutputKind.IsNetModule() Then
                 builder.Add(Diagnostic.Create(MessageProvider.Instance, ERRID.ERR_VBCoreNetModuleConflict))
             End If
@@ -925,20 +949,6 @@ Namespace Microsoft.CodeAnalysis.VisualBasic
             ' TODO: add check for 
             '          (kind == 'arm' || kind == 'appcontainer' || kind == 'winmdobj') &&
             '          (version >= "6.2")
-
-            If Not CryptoPublicKey.IsEmpty Then
-                If CryptoKeyFile IsNot Nothing Then
-                    builder.Add(Diagnostic.Create(MessageProvider.Instance, ERRID.ERR_MutuallyExclusiveOptions, NameOf(CryptoPublicKey), NameOf(CryptoKeyFile)))
-                End If
-
-                If CryptoKeyContainer IsNot Nothing Then
-                    builder.Add(Diagnostic.Create(MessageProvider.Instance, ERRID.ERR_MutuallyExclusiveOptions, NameOf(CryptoPublicKey), NameOf(CryptoKeyContainer)))
-                End If
-            End If
-
-            If PublicSign AndAlso DelaySign = True Then
-                builder.Add(Diagnostic.Create(MessageProvider.Instance, ERRID.ERR_MutuallyExclusiveOptions, NameOf(PublicSign), NameOf(DelaySign)))
-            End If
         End Sub
 
         ''' <summary>
@@ -1182,6 +1192,7 @@ Namespace Microsoft.CodeAnalysis.VisualBasic
                 specificDiagnosticOptions:=specificDiagnosticOptions,
                 concurrentBuild:=concurrentBuild,
                 deterministic:=deterministic,
+                currentLocalTime:=Nothing,
                 suppressEmbeddedDeclarations:=False,
                 extendedCustomDebugInformation:=True,
                 debugPlusMode:=False,
@@ -1194,5 +1205,37 @@ Namespace Microsoft.CodeAnalysis.VisualBasic
                 referencesSupersedeLowerVersions:=False)
 
         End Sub
+
+        Protected Overrides Function CommonWithModuleName(moduleName As String) As CompilationOptions
+            Return WithModuleName(moduleName)
+        End Function
+
+        Protected Overrides Function CommonWithMainTypeName(mainTypeName As String) As CompilationOptions
+            Return WithMainTypeName(mainTypeName)
+        End Function
+
+        Protected Overrides Function CommonWithScriptClassName(scriptClassName As String) As CompilationOptions
+            Return WithScriptClassName(scriptClassName)
+        End Function
+
+        Protected Overrides Function CommonWithCryptoKeyContainer(cryptoKeyContainer As String) As CompilationOptions
+            Return WithCryptoKeyContainer(cryptoKeyContainer)
+        End Function
+
+        Protected Overrides Function CommonWithCryptoKeyFile(cryptoKeyFile As String) As CompilationOptions
+            Return WithCryptoKeyFile(cryptoKeyFile)
+        End Function
+
+        Protected Overrides Function CommonWithCryptoPublicKey(cryptoPublicKey As ImmutableArray(Of Byte)) As CompilationOptions
+            Return WithCryptoPublicKey(cryptoPublicKey)
+        End Function
+
+        Protected Overrides Function CommonWithDelaySign(delaySign As Boolean?) As CompilationOptions
+            Return WithDelaySign(delaySign)
+        End Function
+
+        Protected Overrides Function CommonWithCheckOverflow(checkOverflow As Boolean) As CompilationOptions
+            Return WithOverflowChecks(checkOverflow)
+        End Function
     End Class
 End Namespace

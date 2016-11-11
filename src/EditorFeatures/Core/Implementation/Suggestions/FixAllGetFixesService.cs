@@ -2,6 +2,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.Composition;
 using System.Threading;
 using System.Threading.Tasks;
@@ -30,9 +31,9 @@ namespace Microsoft.CodeAnalysis.Editor.Implementation.Suggestions
             return this;
         }
 
-        public async Task<Solution> GetFixAllChangedSolutionAsync(FixAllProvider fixAllProvider, FixAllContext fixAllContext)
+        public async Task<Solution> GetFixAllChangedSolutionAsync(FixAllContext fixAllContext)
         {
-            var codeAction = await GetFixAllCodeActionAsync(fixAllProvider, fixAllContext).ConfigureAwait(false);
+            var codeAction = await GetFixAllCodeActionAsync(fixAllContext).ConfigureAwait(false);
             if (codeAction == null)
             {
                 return fixAllContext.Solution;
@@ -42,25 +43,27 @@ namespace Microsoft.CodeAnalysis.Editor.Implementation.Suggestions
             return await codeAction.GetChangedSolutionInternalAsync(cancellationToken: fixAllContext.CancellationToken).ConfigureAwait(false);
         }
 
-        public async Task<IEnumerable<CodeActionOperation>> GetFixAllOperationsAsync(FixAllProvider fixAllProvider, FixAllContext fixAllContext, bool showPreviewChangesDialog)
+        public async Task<ImmutableArray<CodeActionOperation>> GetFixAllOperationsAsync(
+            FixAllContext fixAllContext, bool showPreviewChangesDialog)
         {
-            var codeAction = await GetFixAllCodeActionAsync(fixAllProvider, fixAllContext).ConfigureAwait(false);
+            var codeAction = await GetFixAllCodeActionAsync(fixAllContext).ConfigureAwait(false);
             if (codeAction == null)
             {
-                return null;
+                return ImmutableArray<CodeActionOperation>.Empty;
             }
 
-            return await GetFixAllOperationsAsync(codeAction, fixAllContext, showPreviewChangesDialog).ConfigureAwait(false);
+            return await GetFixAllOperationsAsync(
+                codeAction, showPreviewChangesDialog, fixAllContext.State, fixAllContext.CancellationToken).ConfigureAwait(false);
         }
 
-        private async Task<CodeAction> GetFixAllCodeActionAsync(FixAllProvider fixAllProvider, FixAllContext fixAllContext)
+        private async Task<CodeAction> GetFixAllCodeActionAsync(FixAllContext fixAllContext)
         {
             using (Logger.LogBlock(FunctionId.CodeFixes_FixAllOccurrencesComputation, fixAllContext.CancellationToken))
             {
                 CodeAction action = null;
                 try
                 {
-                    action = await fixAllProvider.GetFixAsync(fixAllContext).ConfigureAwait(false);
+                    action = await fixAllContext.FixAllProvider.GetFixAsync(fixAllContext).ConfigureAwait(false);
                 }
                 catch (OperationCanceledException)
                 {
@@ -82,19 +85,20 @@ namespace Microsoft.CodeAnalysis.Editor.Implementation.Suggestions
             }
         }
 
-        private async Task<IEnumerable<CodeActionOperation>> GetFixAllOperationsAsync(CodeAction codeAction, FixAllContext fixAllContext, bool showPreviewChangesDialog)
+        private async Task<ImmutableArray<CodeActionOperation>> GetFixAllOperationsAsync(
+            CodeAction codeAction, bool showPreviewChangesDialog,
+            FixAllState fixAllState, CancellationToken cancellationToken)
         {
             // We have computed the fix all occurrences code fix.
             // Now fetch the new solution with applied fix and bring up the Preview changes dialog.
 
-            var cancellationToken = fixAllContext.CancellationToken;
-            var workspace = fixAllContext.Project.Solution.Workspace;
+            var workspace = fixAllState.Project.Solution.Workspace;
 
             cancellationToken.ThrowIfCancellationRequested();
             var operations = await codeAction.GetOperationsAsync(cancellationToken).ConfigureAwait(false);
             if (operations == null)
             {
-                return null;
+                return ImmutableArray<CodeActionOperation>.Empty;
             }
 
             cancellationToken.ThrowIfCancellationRequested();
@@ -103,16 +107,16 @@ namespace Microsoft.CodeAnalysis.Editor.Implementation.Suggestions
             if (showPreviewChangesDialog)
             {
                 newSolution = PreviewChanges(
-                    fixAllContext.Project.Solution,
+                    fixAllState.Project.Solution,
                     newSolution,
-                    FeaturesResources.FixAllOccurrences,
+                    FeaturesResources.Fix_all_occurrences,
                     codeAction.Title,
-                    fixAllContext.Project.Language,
+                    fixAllState.Project.Language,
                     workspace,
                     cancellationToken);
                 if (newSolution == null)
                 {
-                    return null;
+                    return ImmutableArray<CodeActionOperation>.Empty;
                 }
             }
 
@@ -134,13 +138,13 @@ namespace Microsoft.CodeAnalysis.Editor.Implementation.Suggestions
             {
                 var previewService = workspace.Services.GetService<IPreviewDialogService>();
                 var glyph = languageOpt == null
-                     ? Glyph.Assembly
-                     : languageOpt == LanguageNames.CSharp
-                         ? Glyph.CSharpProject
-                         : Glyph.BasicProject;
+                    ? Glyph.Assembly
+                    : languageOpt == LanguageNames.CSharp
+                        ? Glyph.CSharpProject
+                        : Glyph.BasicProject;
 
                 var changedSolution = previewService.PreviewChanges(
-                    string.Format(EditorFeaturesResources.PreviewChangesOf, fixAllPreviewChangesTitle),
+                    string.Format(EditorFeaturesResources.Preview_Changes_0, fixAllPreviewChangesTitle),
                     "vs.codefix.fixall",
                     fixAllTopLevelHeader,
                     fixAllPreviewChangesTitle,
@@ -160,8 +164,9 @@ namespace Microsoft.CodeAnalysis.Editor.Implementation.Suggestions
             }
         }
 
-        private IEnumerable<CodeActionOperation> GetNewFixAllOperations(IEnumerable<CodeActionOperation> operations, Solution newSolution, CancellationToken cancellationToken)
+        private ImmutableArray<CodeActionOperation> GetNewFixAllOperations(IEnumerable<CodeActionOperation> operations, Solution newSolution, CancellationToken cancellationToken)
         {
+            var result = ArrayBuilder<CodeActionOperation>.GetInstance();
             bool foundApplyChanges = false;
             foreach (var operation in operations)
             {
@@ -173,13 +178,15 @@ namespace Microsoft.CodeAnalysis.Editor.Implementation.Suggestions
                     if (applyChangesOperation != null)
                     {
                         foundApplyChanges = true;
-                        yield return new ApplyChangesOperation(newSolution);
+                        result.Add(new ApplyChangesOperation(newSolution));
                         continue;
                     }
                 }
 
-                yield return operation;
+                result.Add(operation);
             }
+
+            return result.ToImmutableAndFree();
         }
     }
 }

@@ -28,6 +28,17 @@ Namespace Microsoft.CodeAnalysis.Editor.UnitTests.Diagnostics
             End Using
         End Function
 
+        Protected Overridable Function MassageActions(actions As IList(Of CodeAction)) As IList(Of CodeAction)
+            Return actions
+        End Function
+
+        Protected Shared Function FlattenActions(codeActions As IEnumerable(Of CodeAction)) As IList(Of CodeAction)
+            Return codeActions?.SelectMany(
+                Function(a) If(a.NestedCodeActions.Length > 0,
+                               a.NestedCodeActions.ToArray(),
+                               {a})).ToList()
+        End Function
+
         Protected Async Function TestAsync(definition As XElement,
                             Optional expected As String = Nothing,
                             Optional codeActionIndex As Integer = 0,
@@ -39,12 +50,20 @@ Namespace Microsoft.CodeAnalysis.Editor.UnitTests.Diagnostics
                 onAfterWorkspaceCreated?.Invoke(workspace)
 
                 Dim diagnosticAndFix = Await GetDiagnosticAndFixAsync(workspace)
-                Dim codeAction = diagnosticAndFix.Item2.Fixes.ElementAt(codeActionIndex).Action
-                Dim operations = Await codeAction.GetOperationsAsync(CancellationToken.None)
-                Dim edit = operations.OfType(Of ApplyChangesOperation)().First()
+                Dim codeActions = diagnosticAndFix.Item2.Fixes.Select(Function(f) f.Action).ToList()
+                codeActions = MassageActions(codeActions)
+                Dim codeAction = codeActions(codeActionIndex)
 
                 Dim oldSolution = workspace.CurrentSolution
-                Dim updatedSolution = edit.ChangedSolution
+                Dim operations = Await codeAction.GetOperationsAsync(CancellationToken.None)
+
+                For Each operation In operations
+                    If operation.ApplyDuringTests Then
+                        operation.Apply(workspace, CancellationToken.None)
+                    End If
+                Next
+
+                Dim updatedSolution = workspace.CurrentSolution
 
                 verifySolutions?.Invoke(oldSolution, updatedSolution)
 
@@ -99,7 +118,9 @@ Namespace Microsoft.CodeAnalysis.Editor.UnitTests.Diagnostics
                 Dim context = New CodeFixContext(_document, diagnostic, Sub(a, d) fixes.Add(New CodeFix(_document.Project, a, d)), CancellationToken.None)
                 providerAndFixer.Item2.RegisterCodeFixesAsync(context).Wait()
                 If fixes.Any() Then
-                    result.Add(Tuple.Create(diagnostic, New CodeFixCollection(fixer, diagnostic.Location.SourceSpan, fixes)))
+                    result.Add(Tuple.Create(diagnostic, New CodeFixCollection(
+                                            fixer, diagnostic.Location.SourceSpan, fixes.ToImmutableArrayOrEmpty(),
+                                            fixAllState:=Nothing, supportedScopes:=Nothing, firstDiagnostic:=Nothing)))
                 End If
             Next
 

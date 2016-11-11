@@ -175,7 +175,7 @@ namespace Microsoft.CodeAnalysis.Diagnostics
             var fullSpan = tree.GetRoot(cancellationToken).FullSpan;
             var declarationInfos = new List<DeclarationInfo>();
             model.ComputeDeclarationsInSpan(fullSpan, getSymbol: true, builder: declarationInfos, cancellationToken: cancellationToken);
-            return declarationInfos.Select(declInfo => declInfo.DeclaredSymbol).WhereNotNull();
+            return declarationInfos.Select(declInfo => declInfo.DeclaredSymbol).Distinct().WhereNotNull();
         }
 
         private static ImmutableArray<CompilationEvent> CreateCompilationEventsForTree(IEnumerable<ISymbol> declaredSymbols, SyntaxTree tree, Compilation compilation)
@@ -410,9 +410,15 @@ namespace Microsoft.CodeAnalysis.Diagnostics
             }
         }
 
-        internal async Task<AnalyzerActionCounts> GetAnalyzerActionCountsAsync(DiagnosticAnalyzer analyzer, AnalyzerDriver driver, CancellationToken cancellationToken)
+        internal async Task<AnalyzerActionCounts> GetOrComputeAnalyzerActionCountsAsync(DiagnosticAnalyzer analyzer, AnalyzerDriver driver, CancellationToken cancellationToken)
         {
             await EnsureAnalyzerActionCountsInitializedAsync(driver, cancellationToken).ConfigureAwait(false);
+            return _lazyAnalyzerActionCountsMap[analyzer];
+        }
+
+        internal AnalyzerActionCounts GetAnalyzerActionCounts(DiagnosticAnalyzer analyzer)
+        {
+            Debug.Assert(_lazyAnalyzerActionCountsMap != null);
             return _lazyAnalyzerActionCountsMap[analyzer];
         }
 
@@ -689,6 +695,14 @@ namespace Microsoft.CodeAnalysis.Diagnostics
         }
 
         /// <summary>
+        /// Checks if the given event has been fully analyzed for the given analyzer.
+        /// </summary>
+        public bool IsEventComplete(CompilationEvent compilationEvent, DiagnosticAnalyzer analyzer)
+        {
+            return GetAnalyzerState(analyzer).IsEventAnalyzed(compilationEvent);
+        }
+
+        /// <summary>
         /// Attempts to start processing a symbol for the given analyzer's symbol actions.
         /// </summary>
         /// <returns>
@@ -721,11 +735,25 @@ namespace Microsoft.CodeAnalysis.Diagnostics
         }
 
         /// <summary>
-        /// True if the given symbol declaration is fully analyzed.
+        /// True if the given symbol declaration is fully analyzed for all the analyzers.
         /// </summary>
         public bool IsDeclarationComplete(ISymbol symbol, int declarationIndex)
         {
-            foreach (var analyzerState in _analyzerStates)
+            return IsDeclarationComplete(symbol, declarationIndex, _analyzerStates);
+        }
+
+        /// <summary>
+        /// True if the given symbol declaration is fully analyzed for the given analyzer.
+        /// </summary>
+        public bool IsDeclarationComplete(ISymbol symbol, int declarationIndex, DiagnosticAnalyzer analyzer)
+        {
+            var analyzerState = GetAnalyzerState(analyzer);
+            return IsDeclarationComplete(symbol, declarationIndex, SpecializedCollections.SingletonEnumerable(analyzerState));
+        }
+
+        private static bool IsDeclarationComplete(ISymbol symbol, int declarationIndex, IEnumerable<PerAnalyzerState> analyzerStates)
+        {
+            foreach (var analyzerState in analyzerStates)
             {
                 if (!analyzerState.IsDeclarationComplete(symbol, declarationIndex))
                 {

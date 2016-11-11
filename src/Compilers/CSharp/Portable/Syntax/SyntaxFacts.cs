@@ -138,6 +138,9 @@ namespace Microsoft.CodeAnalysis.CSharp
                     case RefValueExpression:
                         return ((RefValueExpressionSyntax)parent).Type == node;
 
+                    case RefType:
+                        return ((RefTypeSyntax)parent).Type == node;
+
                     case Parameter:
                         return ((ParameterSyntax)parent).Type == node;
 
@@ -165,6 +168,9 @@ namespace Microsoft.CodeAnalysis.CSharp
                     case EventDeclaration:
                         return ((EventDeclarationSyntax)parent).Type == node;
 
+                    case LocalFunctionStatement:
+                        return ((LocalFunctionStatementSyntax)parent).ReturnType == node;
+
                     case SimpleBaseType:
                         return true;
 
@@ -180,6 +186,18 @@ namespace Microsoft.CodeAnalysis.CSharp
                         // A ExplicitInterfaceSpecifier represents the left part (QN) of the member name, so it
                         // should be treated like a QualifiedName.
                         return ((ExplicitInterfaceSpecifierSyntax)parent).Name == node;
+
+                    case DeclarationPattern:
+                        return ((DeclarationPatternSyntax)parent).Type == node;
+
+                    case TupleElement:
+                        return ((TupleElementSyntax)parent).Type == node;
+
+                    case DeclarationExpression:
+                        return ((DeclarationExpressionSyntax)parent).Type == node;
+
+                    case IncompleteMember:
+                        return ((IncompleteMemberSyntax)parent).Type == node;
                 }
             }
 
@@ -306,7 +324,7 @@ namespace Microsoft.CodeAnalysis.CSharp
             }
         }
 
-        internal static bool IsStatementExpression(CSharpSyntaxNode syntax)
+        internal static bool IsStatementExpression(SyntaxNode syntax)
         {
             // The grammar gives:
             //
@@ -369,6 +387,22 @@ namespace Microsoft.CodeAnalysis.CSharp
         public static bool IsLambdaBody(SyntaxNode node)
         {
             return LambdaUtilities.IsLambdaBody(node);
+        }
+
+        internal static bool IsVar(this Syntax.InternalSyntax.SyntaxToken node)
+        {
+            return node.Kind == SyntaxKind.IdentifierToken && node.ValueText == "var";
+        }
+
+        internal static bool IsVarOrPredefinedType(this Syntax.InternalSyntax.SyntaxToken node)
+        {
+            return node.IsVar() || IsPredefinedType(node.Kind);
+        }
+
+        internal static bool IsDeclarationExpressionType(SyntaxNode node, out DeclarationExpressionSyntax parent)
+        {
+            parent = node.Parent as DeclarationExpressionSyntax;
+            return node == parent?.Type;
         }
     }
 }

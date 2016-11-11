@@ -67,6 +67,7 @@ namespace Microsoft.CodeAnalysis.CSharp
                    cryptoKeyContainer, cryptoKeyFile, cryptoPublicKey, delaySign, platform,
                    generalDiagnosticOption, warningLevel,
                    specificDiagnosticOptions, concurrentBuild, deterministic,
+                   currentLocalTime: default(DateTime),
                    extendedCustomDebugInformation: true,
                    debugPlusMode: false,
                    xmlReferenceResolver: xmlReferenceResolver,
@@ -102,6 +103,7 @@ namespace Microsoft.CodeAnalysis.CSharp
             IEnumerable<KeyValuePair<string, ReportDiagnostic>> specificDiagnosticOptions,
             bool concurrentBuild,
             bool deterministic,
+            DateTime currentLocalTime,
             bool extendedCustomDebugInformation,
             bool debugPlusMode,
             XmlReferenceResolver xmlReferenceResolver,
@@ -116,7 +118,7 @@ namespace Microsoft.CodeAnalysis.CSharp
             : base(outputKind, reportSuppressedDiagnostics, moduleName, mainTypeName, scriptClassName,
                    cryptoKeyContainer, cryptoKeyFile, cryptoPublicKey, delaySign, publicSign, optimizationLevel, checkOverflow,
                    platform, generalDiagnosticOption, warningLevel, specificDiagnosticOptions.ToImmutableDictionaryOrEmpty(),
-                   concurrentBuild, deterministic, extendedCustomDebugInformation, debugPlusMode, xmlReferenceResolver,
+                   concurrentBuild, deterministic, currentLocalTime, extendedCustomDebugInformation, debugPlusMode, xmlReferenceResolver,
                    sourceReferenceResolver, metadataReferenceResolver, assemblyIdentityComparer,
                    strongNameProvider, metadataImportOptions, referencesSupersedeLowerVersions)
         {
@@ -144,6 +146,7 @@ namespace Microsoft.CodeAnalysis.CSharp
             specificDiagnosticOptions: other.SpecificDiagnosticOptions,
             concurrentBuild: other.ConcurrentBuild,
             deterministic: other.Deterministic,
+            currentLocalTime: other.CurrentLocalTime,
             extendedCustomDebugInformation: other.ExtendedCustomDebugInformation,
             debugPlusMode: other.DebugPlusMode,
             xmlReferenceResolver: other.XmlReferenceResolver,
@@ -158,6 +161,8 @@ namespace Microsoft.CodeAnalysis.CSharp
             topLevelBinderFlags: other.TopLevelBinderFlags)
         {
         }
+
+        public override string Language => LanguageNames.CSharp;
 
         internal CSharpCompilationOptions WithTopLevelBinderFlags(BinderFlags flags)
         {
@@ -176,7 +181,7 @@ namespace Microsoft.CodeAnalysis.CSharp
             return new CSharpCompilationOptions(this) { OutputKind = kind };
         }
 
-        public CSharpCompilationOptions WithModuleName(string moduleName)
+        public new CSharpCompilationOptions WithModuleName(string moduleName)
         {
             if (moduleName == this.ModuleName)
             {
@@ -186,7 +191,7 @@ namespace Microsoft.CodeAnalysis.CSharp
             return new CSharpCompilationOptions(this) { ModuleName = moduleName };
         }
 
-        public CSharpCompilationOptions WithScriptClassName(string name)
+        public new CSharpCompilationOptions WithScriptClassName(string name)
         {
             if (name == this.ScriptClassName)
             {
@@ -196,7 +201,7 @@ namespace Microsoft.CodeAnalysis.CSharp
             return new CSharpCompilationOptions(this) { ScriptClassName = name };
         }
 
-        public CSharpCompilationOptions WithMainTypeName(string name)
+        public new CSharpCompilationOptions WithMainTypeName(string name)
         {
             if (name == this.MainTypeName)
             {
@@ -206,7 +211,7 @@ namespace Microsoft.CodeAnalysis.CSharp
             return new CSharpCompilationOptions(this) { MainTypeName = name };
         }
 
-        public CSharpCompilationOptions WithCryptoKeyContainer(string name)
+        public new CSharpCompilationOptions WithCryptoKeyContainer(string name)
         {
             if (name == this.CryptoKeyContainer)
             {
@@ -216,7 +221,7 @@ namespace Microsoft.CodeAnalysis.CSharp
             return new CSharpCompilationOptions(this) { CryptoKeyContainer = name };
         }
 
-        public CSharpCompilationOptions WithCryptoKeyFile(string path)
+        public new CSharpCompilationOptions WithCryptoKeyFile(string path)
         {
             if (path == this.CryptoKeyFile)
             {
@@ -226,7 +231,7 @@ namespace Microsoft.CodeAnalysis.CSharp
             return new CSharpCompilationOptions(this) { CryptoKeyFile = path };
         }
 
-        public CSharpCompilationOptions WithCryptoPublicKey(ImmutableArray<byte> value)
+        public new CSharpCompilationOptions WithCryptoPublicKey(ImmutableArray<byte> value)
         {
             if (value.IsDefault)
             {
@@ -241,7 +246,7 @@ namespace Microsoft.CodeAnalysis.CSharp
             return new CSharpCompilationOptions(this) { CryptoPublicKey = value };
         }
 
-        public CSharpCompilationOptions WithDelaySign(bool? value)
+        public new CSharpCompilationOptions WithDelaySign(bool? value)
         {
             if (value == this.DelaySign)
             {
@@ -276,7 +281,7 @@ namespace Microsoft.CodeAnalysis.CSharp
             return new CSharpCompilationOptions(this) { OptimizationLevel = value };
         }
 
-        public CSharpCompilationOptions WithOverflowChecks(bool enabled)
+        public new CSharpCompilationOptions WithOverflowChecks(bool enabled)
         {
             if (enabled == this.CheckOverflow)
             {
@@ -375,7 +380,7 @@ namespace Microsoft.CodeAnalysis.CSharp
             return new CSharpCompilationOptions(this) { WarningLevel = warningLevel };
         }
 
-        public CSharpCompilationOptions WithConcurrentBuild(bool concurrentBuild)
+        public new CSharpCompilationOptions WithConcurrentBuild(bool concurrentBuild)
         {
             if (concurrentBuild == this.ConcurrentBuild)
             {
@@ -393,6 +398,16 @@ namespace Microsoft.CodeAnalysis.CSharp
             }
 
             return new CSharpCompilationOptions(this) { Deterministic = deterministic };
+        }
+
+        internal CSharpCompilationOptions WithCurrentLocalTime(DateTime value)
+        {
+            if (value == this.CurrentLocalTime)
+            {
+                return this;
+            }
+
+            return new CSharpCompilationOptions(this) { CurrentLocalTime_internal_protected_set = value };
         }
 
         internal CSharpCompilationOptions WithExtendedCustomDebugInformation(bool extendedCustomDebugInformation)
@@ -487,6 +502,7 @@ namespace Microsoft.CodeAnalysis.CSharp
             return new CSharpCompilationOptions(this) { StrongNameProvider = provider };
         }
 
+        protected override CompilationOptions CommonWithConcurrentBuild(bool concurrent) => WithConcurrentBuild(concurrent);
         protected override CompilationOptions CommonWithDeterministic(bool deterministic) => WithDeterministic(deterministic);
 
         protected override CompilationOptions CommonWithOutputKind(OutputKind kind) => WithOutputKind(kind);
@@ -520,6 +536,8 @@ namespace Microsoft.CodeAnalysis.CSharp
 
         internal override void ValidateOptions(ArrayBuilder<Diagnostic> builder)
         {
+            ValidateOptions(builder, MessageProvider.Instance);
+
             //  /main & /target:{library|netmodule|winmdobj}
             if (this.MainTypeName != null)
             {
@@ -581,24 +599,6 @@ namespace Microsoft.CodeAnalysis.CSharp
             // TODO: add check for 
             //          (kind == 'arm' || kind == 'appcontainer' || kind == 'winmdobj') &&
             //          (version >= "6.2")
-
-            if (!CryptoPublicKey.IsEmpty)
-            {
-                if (CryptoKeyFile != null)
-                {
-                    builder.Add(Diagnostic.Create(MessageProvider.Instance, (int)ErrorCode.ERR_MutuallyExclusiveOptions, nameof(CryptoPublicKey), nameof(CryptoKeyFile)));
-                }
-
-                if (CryptoKeyContainer != null)
-                {
-                    builder.Add(Diagnostic.Create(MessageProvider.Instance, (int)ErrorCode.ERR_MutuallyExclusiveOptions, nameof(CryptoPublicKey), nameof(CryptoKeyContainer)));
-                }
-            }
-
-            if (PublicSign && DelaySign == true)
-            {
-                builder.Add(Diagnostic.Create(MessageProvider.Instance, (int)ErrorCode.ERR_MutuallyExclusiveOptions, nameof(PublicSign), nameof(DelaySign)));
-            }
         }
 
         public bool Equals(CSharpCompilationOptions other)
@@ -634,6 +634,46 @@ namespace Microsoft.CodeAnalysis.CSharp
         internal override Diagnostic FilterDiagnostic(Diagnostic diagnostic)
         {
             return CSharpDiagnosticFilter.Filter(diagnostic, WarningLevel, GeneralDiagnosticOption, SpecificDiagnosticOptions);
+        }
+
+        protected override CompilationOptions CommonWithModuleName(string moduleName)
+        {
+            return WithModuleName(moduleName);
+        }
+
+        protected override CompilationOptions CommonWithMainTypeName(string mainTypeName)
+        {
+            return WithMainTypeName(mainTypeName);
+        }
+
+        protected override CompilationOptions CommonWithScriptClassName(string scriptClassName)
+        {
+            return WithScriptClassName(scriptClassName);
+        }
+
+        protected override CompilationOptions CommonWithCryptoKeyContainer(string cryptoKeyContainer)
+        {
+            return WithCryptoKeyContainer(cryptoKeyContainer);
+        }
+
+        protected override CompilationOptions CommonWithCryptoKeyFile(string cryptoKeyFile)
+        {
+            return WithCryptoKeyFile(cryptoKeyFile);
+        }
+
+        protected override CompilationOptions CommonWithCryptoPublicKey(ImmutableArray<byte> cryptoPublicKey)
+        {
+            return WithCryptoPublicKey(cryptoPublicKey);
+        }
+
+        protected override CompilationOptions CommonWithDelaySign(bool? delaySign)
+        {
+            return WithDelaySign(delaySign);
+        }
+
+        protected override CompilationOptions CommonWithCheckOverflow(bool checkOverflow)
+        {
+            return WithOverflowChecks(checkOverflow);
         }
 
         // 1.1 BACKCOMPAT OVERLOAD -- DO NOT TOUCH
@@ -749,6 +789,7 @@ namespace Microsoft.CodeAnalysis.CSharp
                    delaySign, platform, generalDiagnosticOption, warningLevel,
                    specificDiagnosticOptions, concurrentBuild,
                    deterministic: deterministic,
+                   currentLocalTime: default(DateTime),
                    extendedCustomDebugInformation: true,
                    debugPlusMode: false,
                    xmlReferenceResolver: xmlReferenceResolver,

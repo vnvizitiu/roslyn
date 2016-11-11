@@ -10,6 +10,7 @@ using System.Threading.Tasks;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.Diagnostics;
 using Microsoft.CodeAnalysis.Host;
+using Microsoft.CodeAnalysis.Serialization;
 using Roslyn.Utilities;
 
 namespace Microsoft.CodeAnalysis
@@ -25,7 +26,12 @@ namespace Microsoft.CodeAnalysis
         private readonly IReadOnlyList<DocumentId> _additionalDocumentIds;
         private readonly AsyncLazy<VersionStamp> _lazyLatestDocumentVersion;
         private readonly AsyncLazy<VersionStamp> _lazyLatestDocumentTopLevelChangeVersion;
-        private AnalyzerOptions _analyzerOptions;
+
+        // Checksums for this solution state
+        private readonly ValueSource<ProjectStateChecksums> _lazyChecksums;
+
+        // this will be initialized lazily.
+        private AnalyzerOptions _analyzerOptionsDoNotAccessDirectly;
 
         private ProjectState(
             ProjectInfo projectInfo,
@@ -36,7 +42,8 @@ namespace Microsoft.CodeAnalysis
             ImmutableDictionary<DocumentId, DocumentState> documentStates,
             ImmutableDictionary<DocumentId, TextDocumentState> additionalDocumentStates,
             AsyncLazy<VersionStamp> lazyLatestDocumentVersion,
-            AsyncLazy<VersionStamp> lazyLatestDocumentTopLevelChangeVersion)
+            AsyncLazy<VersionStamp> lazyLatestDocumentTopLevelChangeVersion,
+            ValueSource<ProjectStateChecksums> lazyChecksums)
         {
             _projectInfo = projectInfo;
             _solutionServices = solutionServices;
@@ -47,9 +54,13 @@ namespace Microsoft.CodeAnalysis
             _additionalDocumentStates = additionalDocumentStates;
             _lazyLatestDocumentVersion = lazyLatestDocumentVersion;
             _lazyLatestDocumentTopLevelChangeVersion = lazyLatestDocumentTopLevelChangeVersion;
+
+            // for now, let it re-calculate if anything changed.
+            // TODO: optimize this so that we only re-calcuate checksums that are actually changed
+            _lazyChecksums = new AsyncLazy<ProjectStateChecksums>(ComputeChecksumsAsync, cacheResult: true);
         }
 
-        internal ProjectState(ProjectInfo projectInfo, HostLanguageServices languageServices, SolutionServices solutionServices)
+        public ProjectState(ProjectInfo projectInfo, HostLanguageServices languageServices, SolutionServices solutionServices)
         {
             Contract.ThrowIfNull(projectInfo);
             Contract.ThrowIfNull(languageServices);
@@ -61,12 +72,12 @@ namespace Microsoft.CodeAnalysis
             _projectInfo = FixProjectInfo(projectInfo);
 
             _documentIds = _projectInfo.Documents.Select(d => d.Id).ToImmutableArray();
-            _additionalDocumentIds = this.ProjectInfo.AdditionalDocuments.Select(d => d.Id).ToImmutableArray();
+            _additionalDocumentIds = _projectInfo.AdditionalDocuments.Select(d => d.Id).ToImmutableArray();
 
             var docStates = ImmutableDictionary.CreateRange<DocumentId, DocumentState>(
                 _projectInfo.Documents.Select(d =>
                     new KeyValuePair<DocumentId, DocumentState>(d.Id,
-                        CreateDocument(this.ProjectInfo, d, languageServices, solutionServices))));
+                        CreateDocument(_projectInfo, d, languageServices, solutionServices))));
 
             _documentStates = docStates;
 
@@ -78,6 +89,10 @@ namespace Microsoft.CodeAnalysis
 
             _lazyLatestDocumentVersion = new AsyncLazy<VersionStamp>(c => ComputeLatestDocumentVersionAsync(docStates, additionalDocStates, c), cacheResult: true);
             _lazyLatestDocumentTopLevelChangeVersion = new AsyncLazy<VersionStamp>(c => ComputeLatestDocumentTopLevelChangeVersionAsync(docStates, additionalDocStates, c), cacheResult: true);
+
+            // for now, let it re-calculate if anything changed.
+            // TODO: optimize this so that we only re-calcuate checksums that are actually changed
+            _lazyChecksums = new AsyncLazy<ProjectStateChecksums>(ComputeChecksumsAsync, cacheResult: true);
         }
 
         private ProjectInfo FixProjectInfo(ProjectInfo projectInfo)
@@ -186,57 +201,16 @@ namespace Microsoft.CodeAnalysis
             return doc;
         }
 
-        public ProjectId Id
-        {
-            get { return this.ProjectInfo.Id; }
-        }
-
-        public string FilePath
-        {
-            get { return this.ProjectInfo.FilePath; }
-        }
-
-        public string OutputFilePath
-        {
-            get { return this.ProjectInfo.OutputFilePath; }
-        }
-
-        public HostLanguageServices LanguageServices
-        {
-            get { return _languageServices; }
-        }
-
-        public string Name
-        {
-            get { return this.ProjectInfo.Name; }
-        }
-
-        public bool IsSubmission
-        {
-            get { return this.ProjectInfo.IsSubmission; }
-        }
-
-        public Type HostObjectType
-        {
-            get { return this.ProjectInfo.HostObjectType; }
-        }
-
-        [DebuggerBrowsable(DebuggerBrowsableState.Collapsed)]
-        public VersionStamp Version
-        {
-            get { return this.ProjectInfo.Version; }
-        }
-
         public AnalyzerOptions AnalyzerOptions
         {
             get
             {
-                if (_analyzerOptions == null)
+                if (_analyzerOptionsDoNotAccessDirectly == null)
                 {
-                    _analyzerOptions = new AnalyzerOptions(_additionalDocumentStates.Values.Select(d => new AdditionalTextDocument(d)).ToImmutableArray<AdditionalText>());
+                    _analyzerOptionsDoNotAccessDirectly = new AnalyzerOptions(_additionalDocumentStates.Values.Select(d => new AdditionalTextDocument(d)).ToImmutableArray<AdditionalText>());
                 }
 
-                return _analyzerOptions;
+                return _analyzerOptionsDoNotAccessDirectly;
             }
         }
 
@@ -262,82 +236,76 @@ namespace Microsoft.CodeAnalysis
         }
 
         [DebuggerBrowsable(DebuggerBrowsableState.Collapsed)]
-        public ProjectInfo ProjectInfo
-        {
-            get { return _projectInfo; }
-        }
+        public ProjectId Id => this.ProjectInfo.Id;
 
         [DebuggerBrowsable(DebuggerBrowsableState.Collapsed)]
-        public string AssemblyName
-        {
-            get { return this.ProjectInfo.AssemblyName; }
-        }
+        public string FilePath => this.ProjectInfo.FilePath;
 
         [DebuggerBrowsable(DebuggerBrowsableState.Collapsed)]
-        public CompilationOptions CompilationOptions
-        {
-            get { return this.ProjectInfo.CompilationOptions; }
-        }
+        public string OutputFilePath => this.ProjectInfo.OutputFilePath;
 
         [DebuggerBrowsable(DebuggerBrowsableState.Collapsed)]
-        public ParseOptions ParseOptions
-        {
-            get { return this.ProjectInfo.ParseOptions; }
-        }
+        public HostLanguageServices LanguageServices => _languageServices;
 
         [DebuggerBrowsable(DebuggerBrowsableState.Collapsed)]
-        public IReadOnlyList<MetadataReference> MetadataReferences
-        {
-            get { return this.ProjectInfo.MetadataReferences; }
-        }
+        public string Language => LanguageServices.Language;
 
         [DebuggerBrowsable(DebuggerBrowsableState.Collapsed)]
-        public IReadOnlyList<AnalyzerReference> AnalyzerReferences
-        {
-            get { return this.ProjectInfo.AnalyzerReferences; }
-        }
+        public string Name => this.ProjectInfo.Name;
 
         [DebuggerBrowsable(DebuggerBrowsableState.Collapsed)]
-        public IReadOnlyList<ProjectReference> ProjectReferences
-        {
-            get { return this.ProjectInfo.ProjectReferences; }
-        }
+        public bool IsSubmission => this.ProjectInfo.IsSubmission;
 
         [DebuggerBrowsable(DebuggerBrowsableState.Collapsed)]
-        public bool HasDocuments
-        {
-            get { return _documentIds.Count > 0; }
-        }
+        public Type HostObjectType => this.ProjectInfo.HostObjectType;
 
         [DebuggerBrowsable(DebuggerBrowsableState.Collapsed)]
-        public IEnumerable<DocumentState> OrderedDocumentStates
-        {
-            get { return this.DocumentIds.Select(GetDocumentState); }
-        }
+        public bool SupportsCompilation => this.LanguageServices.GetService<ICompilationFactoryService>() != null;
 
         [DebuggerBrowsable(DebuggerBrowsableState.Collapsed)]
-        public IReadOnlyList<DocumentId> DocumentIds
-        {
-            get { return _documentIds; }
-        }
+        public VersionStamp Version => this.ProjectInfo.Version;
 
         [DebuggerBrowsable(DebuggerBrowsableState.Collapsed)]
-        public IReadOnlyList<DocumentId> AdditionalDocumentIds
-        {
-            get { return _additionalDocumentIds; }
-        }
+        public ProjectInfo ProjectInfo => _projectInfo;
 
         [DebuggerBrowsable(DebuggerBrowsableState.Collapsed)]
-        private ImmutableDictionary<DocumentId, DocumentState> DocumentStates
-        {
-            get { return _documentStates; }
-        }
+        public string AssemblyName => this.ProjectInfo.AssemblyName;
 
         [DebuggerBrowsable(DebuggerBrowsableState.Collapsed)]
-        private ImmutableDictionary<DocumentId, TextDocumentState> AdditionalDocumentStates
-        {
-            get { return _additionalDocumentStates; }
-        }
+        public CompilationOptions CompilationOptions => this.ProjectInfo.CompilationOptions;
+
+        [DebuggerBrowsable(DebuggerBrowsableState.Collapsed)]
+        public ParseOptions ParseOptions => this.ProjectInfo.ParseOptions;
+
+        [DebuggerBrowsable(DebuggerBrowsableState.Collapsed)]
+        public IReadOnlyList<MetadataReference> MetadataReferences => this.ProjectInfo.MetadataReferences;
+
+        [DebuggerBrowsable(DebuggerBrowsableState.Collapsed)]
+        public IReadOnlyList<AnalyzerReference> AnalyzerReferences => this.ProjectInfo.AnalyzerReferences;
+
+        [DebuggerBrowsable(DebuggerBrowsableState.Collapsed)]
+        public IReadOnlyList<ProjectReference> ProjectReferences => this.ProjectInfo.ProjectReferences;
+
+        [DebuggerBrowsable(DebuggerBrowsableState.Collapsed)]
+        public bool HasAllInformation => this.ProjectInfo.HasAllInformation;
+
+        [DebuggerBrowsable(DebuggerBrowsableState.Collapsed)]
+        public bool HasDocuments => _documentIds.Count > 0;
+
+        [DebuggerBrowsable(DebuggerBrowsableState.Collapsed)]
+        public IEnumerable<DocumentState> OrderedDocumentStates => this.DocumentIds.Select(GetDocumentState);
+
+        [DebuggerBrowsable(DebuggerBrowsableState.Collapsed)]
+        public IReadOnlyList<DocumentId> DocumentIds => _documentIds;
+
+        [DebuggerBrowsable(DebuggerBrowsableState.Collapsed)]
+        public IReadOnlyList<DocumentId> AdditionalDocumentIds => _additionalDocumentIds;
+
+        [DebuggerBrowsable(DebuggerBrowsableState.Collapsed)]
+        public ImmutableDictionary<DocumentId, DocumentState> DocumentStates => _documentStates;
+
+        [DebuggerBrowsable(DebuggerBrowsableState.Collapsed)]
+        public ImmutableDictionary<DocumentId, TextDocumentState> AdditionalDocumentStates => _additionalDocumentStates;
 
         public bool ContainsDocument(DocumentId documentId)
         {
@@ -371,8 +339,9 @@ namespace Microsoft.CodeAnalysis
             ImmutableDictionary<DocumentId, TextDocumentState> additionalDocumentStates = null,
             AsyncLazy<VersionStamp> latestDocumentVersion = null,
             AsyncLazy<VersionStamp> latestDocumentTopLevelChangeVersion = null,
-            Lazy<AnalyzerOptions> lazyAnalyzerOptions = null)
+            ValueSource<ProjectStateChecksums> lazyChecksums = null)
         {
+            // for now, re-calculate all checksums when anything changed
             return new ProjectState(
                 projectInfo ?? _projectInfo,
                 _languageServices,
@@ -382,7 +351,8 @@ namespace Microsoft.CodeAnalysis
                 documentStates ?? _documentStates,
                 additionalDocumentStates ?? _additionalDocumentStates,
                 latestDocumentVersion ?? _lazyLatestDocumentVersion,
-                latestDocumentTopLevelChangeVersion ?? _lazyLatestDocumentTopLevelChangeVersion);
+                latestDocumentTopLevelChangeVersion ?? _lazyLatestDocumentTopLevelChangeVersion,
+                lazyChecksums ?? _lazyChecksums);
         }
 
         public ProjectState UpdateName(string name)
@@ -455,6 +425,16 @@ namespace Microsoft.CodeAnalysis
             return this.With(
                 projectInfo: this.ProjectInfo.WithParseOptions(options).WithVersion(this.Version.GetNewerVersion()),
                 documentStates: docMap);
+        }
+
+        public ProjectState UpdateHasAllInformation(bool hasAllInformation)
+        {
+            if (hasAllInformation == this.HasAllInformation)
+            {
+                return this;
+            }
+
+            return this.With(projectInfo: this.ProjectInfo.WithHasAllInformation(hasAllInformation).WithVersion(this.Version.GetNewerVersion()));
         }
 
         public static bool IsSameLanguage(ProjectState project1, ProjectState project2)

@@ -2708,11 +2708,6 @@ class C
             // Invalid arguments - Validate Exceptions     
             Assert.Throws<System.ArgumentNullException>(delegate
             {
-                var treeFromSource_invalid2 = SyntaxFactory.ParseSyntaxTree("", path: null);
-            });
-
-            Assert.Throws<System.ArgumentNullException>(delegate
-            {
                 SourceText st = null;
                 var treeFromSource_invalid2 = SyntaxFactory.ParseSyntaxTree(st);
             });
@@ -2961,6 +2956,20 @@ namespace HelloWorld
             var position = 4000;
             var trivia = tree.GetCompilationUnitRoot().FindTrivia(position);
             // no stack overflow
+        }
+
+        [Fact, WorkItem(8625, "https://github.com/dotnet/roslyn/issues/8625")]
+        public void SyntaxNodeContains()
+        {
+            var text = "a + (b - (c * (d / e)))";
+            var expression = SyntaxFactory.ParseExpression(text);
+            var a = expression.DescendantNodes().OfType<IdentifierNameSyntax>().First(n => n.Identifier.Text == "a");
+            var e = expression.DescendantNodes().OfType<IdentifierNameSyntax>().First(n => n.Identifier.Text == "e");
+
+            var firstParens = e.FirstAncestorOrSelf<ExpressionSyntax>(n => n.Kind() == SyntaxKind.ParenthesizedExpression);
+
+            Assert.False(firstParens.Contains(a));  // fixing #8625 allows this to return quicker
+            Assert.True(firstParens.Contains(e));
         }
     }
 }

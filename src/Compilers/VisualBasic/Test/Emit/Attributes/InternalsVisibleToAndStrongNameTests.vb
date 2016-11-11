@@ -31,6 +31,18 @@ Partial Public Class InternalsVisibleToAndStrongNameTests
         Return New SigningTestHelpers.VirtualizedStrongNameProvider(ImmutableArray.Create(keyFilePath))
     End Function
 
+    Private Shared Sub VerifySigned(comp As Compilation)
+        Using outStream = comp.EmitToStream()
+
+            outStream.Position = 0
+
+            Dim headers = New PEHeaders(outStream)
+
+            Dim flags = headers.CorHeader.Flags
+            Assert.True(flags.HasFlag(CorFlags.StrongNameSigned))
+        End Using
+    End Sub
+
 #End Region
 
 #Region "Naming Tests"
@@ -397,7 +409,7 @@ End Class
         Assert.True(other.Assembly.Identity.PublicKey.IsEmpty)
     End Sub
 
-    <ConditionalFact(GetType(IsEnglishLocal))>
+    <Fact>
     Public Sub PubKeyContainerBogusOptions()
         Dim other As VisualBasicCompilation = CreateCompilationWithMscorlib(
 <compilation>
@@ -419,7 +431,7 @@ End Class
         Assert.Equal(ERRID.ERR_PublicKeyContainerFailure, err.Code)
         Assert.Equal(2, err.Arguments.Count)
         Assert.Equal("foo", DirectCast(err.Arguments(0), String))
-        Assert.True(DirectCast(err.Arguments(1), String).EndsWith(" HRESULT: 0x80090016)", StringComparison.Ordinal))
+        Assert.True(DirectCast(err.Arguments(1), String).Contains("HRESULT: 0x80090016"))
 
         Assert.True(other.Assembly.Identity.PublicKey.IsEmpty)
     End Sub
@@ -540,7 +552,7 @@ End Class
         c2.VerifyDiagnostics()
     End Sub
 
-    <ConditionalFact(GetType(IsEnglishLocal))>
+    <Fact>
     Public Sub SignModuleKeyContainerBogus()
         Dim c1 As VisualBasicCompilation = CreateCompilationWithMscorlib(
 <compilation name="WantsIVTAccess">
@@ -564,13 +576,15 @@ End Class
      </file>
  </compilation>), {reference}, TestOptions.ReleaseDll.WithStrongNameProvider(s_defaultProvider))
 
+        'BC36981: Error extracting public key from container 'bogus': Keyset does not exist (Exception from HRESULT: 0x80090016)
         'c2.VerifyDiagnostics(Diagnostic(ERRID.ERR_PublicKeyContainerFailure).WithArguments("bogus", "Keyset does not exist (Exception from HRESULT: 0x80090016)"))
+
         Dim err = c2.GetDiagnostics(CompilationStage.Emit).Single()
 
         Assert.Equal(ERRID.ERR_PublicKeyContainerFailure, err.Code)
         Assert.Equal(2, err.Arguments.Count)
         Assert.Equal("bogus", DirectCast(err.Arguments(0), String))
-        Assert.True(DirectCast(err.Arguments(1), String).EndsWith(" HRESULT: 0x80090016)", StringComparison.Ordinal))
+        Assert.True(DirectCast(err.Arguments(1), String).Contains("HRESULT: 0x80090016"))
     End Sub
 
     <Fact>
@@ -911,6 +925,63 @@ BC31535: Friend assembly reference 'WantsIVTAccess' is invalid. Strong-name sign
 #End Region
 
 #Region "Signing"
+
+    <Fact>
+    Public Sub MaxSizeKey()
+        Dim pubKey = TestResources.General.snMaxSizePublicKeyString
+        Const pubKeyToken = "1540923db30520b2"
+        Dim pubKeyTokenBytes As Byte() = {&H15, &H40, &H92, &H3D, &HB3, &H5, &H20, &HB2}
+
+        Dim comp = CreateCompilationWithMscorlib(
+<compilation>
+    <file name="c.vb">
+Imports System
+Imports System.Runtime.CompilerServices
+
+&lt;Assembly:InternalsVisibleTo("MaxSizeComp2, PublicKey=<%= pubKey %>, PublicKeyToken=<%= pubKeyToken %>")&gt;
+
+Friend Class C
+    Public Shared Sub M()
+        Console.WriteLine("Called M")
+    End Sub
+End Class
+    </file>
+</compilation>,
+                options:=TestOptions.ReleaseDll.WithCryptoKeyFile(SigningTestHelpers.MaxSizeKeyFile).WithStrongNameProvider(s_defaultProvider))
+
+        comp.VerifyEmitDiagnostics()
+
+        Assert.True(comp.IsRealSigned)
+        VerifySigned(comp)
+        Assert.Equal(TestResources.General.snMaxSizePublicKey, comp.Assembly.Identity.PublicKey)
+        Assert.Equal(Of Byte)(pubKeyTokenBytes, comp.Assembly.Identity.PublicKeyToken)
+
+        Dim src =
+<compilation name="MaxSizeComp2">
+    <file name="c.vb">
+Class D
+    Public Shared Sub Main()
+        C.M()
+    End Sub
+End Class
+    </file>
+</compilation>
+
+        Dim comp2 = CreateCompilationWithMscorlib(src, references:={comp.ToMetadataReference()},
+options:=TestOptions.ReleaseExe.WithCryptoKeyFile(SigningTestHelpers.MaxSizeKeyFile).WithStrongNameProvider(s_defaultProvider))
+
+        CompileAndVerify(comp2, expectedOutput:="Called M")
+        Assert.Equal(TestResources.General.snMaxSizePublicKey, comp2.Assembly.Identity.PublicKey)
+        Assert.Equal(Of Byte)(pubKeyTokenBytes, comp2.Assembly.Identity.PublicKeyToken)
+
+        Dim comp3 = CreateCompilationWithMscorlib(src, references:={comp.EmitToImageReference()},
+options:=TestOptions.ReleaseExe.WithCryptoKeyFile(SigningTestHelpers.MaxSizeKeyFile).WithStrongNameProvider(s_defaultProvider))
+
+        CompileAndVerify(comp3, expectedOutput:="Called M")
+        Assert.Equal(TestResources.General.snMaxSizePublicKey, comp3.Assembly.Identity.PublicKey)
+        Assert.Equal(Of Byte)(pubKeyTokenBytes, comp3.Assembly.Identity.PublicKeyToken)
+    End Sub
+
     <Fact>
     Public Sub SignIt()
         Dim other As VisualBasicCompilation = CreateCompilationWithMscorlib(
@@ -1673,6 +1744,45 @@ BC37254: Public sign was specified and requires a public key, but no public key 
         Assert.True(comp.Assembly.PublicKey.IsDefaultOrEmpty)
     End Sub
 
+
+    <Fact>
+    Public Sub KeyFileFromAttributes_PublicSign()
+        Dim source = <compilation>
+                         <file name="a.vb"><![CDATA[
+<assembly: System.Reflection.AssemblyKeyFile("test.snk")>
+Public Class C
+End Class
+]]>
+                         </file>
+                     </compilation>
+        Dim c = CreateCompilationWithMscorlib(source, options:=TestOptions.ReleaseDll.WithPublicSign(True))
+        AssertTheseDiagnostics(c,
+                               <errors>
+BC37254: Public sign was specified and requires a public key, but no public key was specified
+                               </errors>)
+
+        Assert.True(c.Options.PublicSign)
+    End Sub
+
+    <Fact>
+    Public Sub KeyContainerFromAttributes_PublicSign()
+        Dim source = <compilation>
+                         <file name="a.vb"><![CDATA[
+<assembly: System.Reflection.AssemblyKeyName("roslynTestContainer")>
+Public Class C
+End Class
+]]>
+                         </file>
+                     </compilation>
+        Dim c = CreateCompilationWithMscorlib(source, options:=TestOptions.ReleaseDll.WithPublicSign(True))
+        AssertTheseDiagnostics(c,
+                               <errors>
+BC37254: Public sign was specified and requires a public key, but no public key was specified
+                               </errors>)
+
+        Assert.True(c.Options.PublicSign)
+    End Sub
+
     <Fact>
     Public Sub PublicSign_FromKeyFileNoStrongNameProvider()
         Dim snk = Temp.CreateFile().WriteAllBytes(TestResources.General.snKey)
@@ -1699,6 +1809,24 @@ BC37254: Public sign was specified and requires a public key, but no public key 
         Dim snk = Temp.CreateFile().WriteAllBytes(TestResources.General.snPublicKey2)
         Dim options = TestOptions.ReleaseDll.WithCryptoKeyFile(snk.Path).WithPublicSign(True)
         PublicSignCore(options)
+    End Sub
+
+    <Fact>
+    Public Sub PublicSign_KeyContainerOnly()
+        Dim source =
+            <compilation>
+                <file name="a.vb"><![CDATA[
+Public Class C
+End Class
+]]>
+                </file>
+            </compilation>
+        Dim options = TestOptions.ReleaseDll.WithCryptoKeyContainer("testContainer").WithPublicSign(True)
+        Dim compilation = CreateCompilationWithMscorlib(source, options:=options)
+        AssertTheseDiagnostics(compilation, <errors>
+BC2046: Compilation options 'PublicSign' and 'CryptoKeyContainer' can't both be specified at the same time.
+BC37254: Public sign was specified and requires a public key, but no public key was specified
+                                            </errors>)
     End Sub
 
     <Fact>
