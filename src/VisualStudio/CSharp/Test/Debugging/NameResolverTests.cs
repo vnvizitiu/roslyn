@@ -1,4 +1,4 @@
-// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+﻿// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
 using System.Collections.Generic;
 using System.Linq;
@@ -17,7 +17,7 @@ namespace Microsoft.CodeAnalysis.Editor.CSharp.UnitTests.Debugging
     {
         private async Task TestAsync(string text, string searchText, params string[] expectedNames)
         {
-            using (var workspace = await TestWorkspace.CreateCSharpAsync(text))
+            using (var workspace = TestWorkspace.CreateCSharp(text))
             {
                 var nameResolver = new BreakpointResolver(workspace.CurrentSolution, searchText);
                 var results = await nameResolver.DoAsync(CancellationToken.None);
@@ -29,7 +29,7 @@ namespace Microsoft.CodeAnalysis.Editor.CSharp.UnitTests.Debugging
         [Fact, Trait(Traits.Feature, Traits.Features.DebuggingNameResolver)]
         public async Task TestCSharpLanguageDebugInfoCreateNameResolver()
         {
-            using (var workspace = await TestWorkspace.CreateCSharpAsync(" "))
+            using (var workspace = TestWorkspace.CreateCSharp(" "))
             {
                 var debugInfo = new CSharpBreakpointResolutionService();
                 var results = await debugInfo.ResolveBreakpointsAsync(workspace.CurrentSolution, "foo", CancellationToken.None);

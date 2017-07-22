@@ -191,8 +191,8 @@ namespace Microsoft.CodeAnalysis.CSharp.CodeGen
                     EmitAsExpression((BoundAsOperator)expression, used);
                     break;
 
-                case BoundKind.DefaultOperator:
-                    EmitDefaultExpression((BoundDefaultOperator)expression, used);
+                case BoundKind.DefaultExpression:
+                    EmitDefaultExpression((BoundDefaultExpression)expression, used);
                     break;
 
                 case BoundKind.TypeOfOperator:
@@ -306,10 +306,6 @@ namespace Microsoft.CodeAnalysis.CSharp.CodeGen
                     EmitThrowExpression((BoundThrowExpression)expression, used);
                     break;
 
-                case BoundKind.Void:
-                    Debug.Assert(!used);
-                    break;
-
                 default:
                     // Code gen should not be invoked if there are errors.
                     Debug.Assert(expression.Kind != BoundKind.BadExpression);
@@ -355,12 +351,6 @@ namespace Microsoft.CodeAnalysis.CSharp.CodeGen
         {
             var receiver = expression.Receiver;
 
-            if (receiver.IsDefaultValue())
-            {
-                EmitDefaultValue(expression.Type, used, expression.Syntax);
-                return;
-            }
-
             var receiverType = receiver.Type;
             LocalDefinition receiverTemp = null;
             Debug.Assert(!receiverType.IsValueType ||
@@ -384,15 +374,15 @@ namespace Microsoft.CodeAnalysis.CSharp.CodeGen
             object doneLabel = new object();
             LocalDefinition cloneTemp = null;
 
+            var unconstrainedReceiver = !receiverType.IsReferenceType && !receiverType.IsValueType;
+
             // we need a copy if we deal with nonlocal value (to capture the value)
             // or if we have a ref-constrained T (to do box just once) 
             // or if we deal with stack local (reads are destructive)
+            // or if we have default(T) (to do box just once)
             var nullCheckOnCopy = LocalRewriter.CanChangeValueBetweenReads(receiver, localsMayBeAssignedOrCaptured: false) ||
                                    (receiverType.IsReferenceType && receiverType.TypeKind == TypeKind.TypeParameter) ||
                                    (receiver.Kind == BoundKind.Local && IsStackLocal(((BoundLocal)receiver).LocalSymbol));
-
-            var unconstrainedReceiver = !receiverType.IsReferenceType && !receiverType.IsValueType;
-
 
             // ===== RECEIVER
             if (nullCheckOnCopy)
@@ -501,7 +491,7 @@ namespace Microsoft.CodeAnalysis.CSharp.CodeGen
             {
                 Debug.Assert(receiverTemp == null);
                 receiverTemp = EmitReceiverRef(receiver, isAccessConstrained: unconstrainedReceiver);
-                Debug.Assert(receiverTemp == null);
+                Debug.Assert(receiverTemp == null || receiver.IsDefaultValue());
             }
 
             EmitExpression(expression.WhenNotNull, used);
@@ -600,7 +590,7 @@ namespace Microsoft.CodeAnalysis.CSharp.CodeGen
         {
             var temp = EmitAddress(expression.Operand, AddressKind.Writeable);
             Debug.Assert(temp == null, "If the operand is addressable, then a temp shouldn't be required.");
-            if (used && !expression.IsFixedStatementAddressOf)
+            if (used)
             {
                 // When computing an address to be used to initialize a fixed-statement variable, we have to be careful
                 // not to convert the managed reference to an unmanaged pointer before storing it.  Otherwise the GC might
@@ -643,8 +633,8 @@ namespace Microsoft.CodeAnalysis.CSharp.CodeGen
 
         private void EmitDelegateCreationExpression(BoundDelegateCreationExpression expression, bool used)
         {
-            var mg = expression.Argument as BoundMethodGroup;
-            var receiver = mg != null ? mg.ReceiverOpt : expression.Argument;
+            Debug.Assert(expression.Argument?.Kind != BoundKind.MethodGroup);
+            var receiver = expression.Argument;
             var meth = expression.MethodOpt ?? receiver.Type.DelegateInvokeMethod();
             Debug.Assert((object)meth != null);
             EmitDelegateCreation(expression, receiver, expression.IsExtensionMethod, meth, expression.Type, used);
@@ -871,17 +861,28 @@ namespace Microsoft.CodeAnalysis.CSharp.CodeGen
         {
             var field = fieldAccess.FieldSymbol;
 
-            //TODO: For static field access this may require ..ctor to run. Is this a side-effect?
-            // Accessing unused instance field on a struct is a noop. Just emit the receiver.
-            if (!used && !field.IsVolatile && !field.IsStatic && fieldAccess.ReceiverOpt.Type.IsVerifierValue())
+            if (!used)
             {
-                EmitExpression(fieldAccess.ReceiverOpt, used: false);
-                return;
+                // fetching unused captured frame is a no-op (like reading "this")
+                if (field.IsCapturedFrame)
+                {
+                    return;
+                }
+
+                // Accessing a volatile field is sideeffecting because it establishes an acquire fence.
+                // Otherwise, accessing an unused instance field on a struct is a noop. Just emit an unused receiver.
+                if (!field.IsVolatile && !field.IsStatic && fieldAccess.ReceiverOpt.Type.IsVerifierValue())
+                {
+                    EmitExpression(fieldAccess.ReceiverOpt, used: false);
+                    return;
+                }
             }
 
             Debug.Assert(!field.IsConst || field.ContainingType.SpecialType == SpecialType.System_Decimal,
                 "rewriter should lower constant fields into constant expressions");
 
+            // static field access is sideeffecting since it gurantees that ..ctor has run.
+            // we emit static accesses even if unused.
             if (field.IsStatic)
             {
                 if (field.IsVolatile)
@@ -1252,8 +1253,8 @@ namespace Microsoft.CodeAnalysis.CSharp.CodeGen
                     return true;
 
                 case BoundKind.ObjectCreationExpression:
-                    //NOTE: there are cases involving ProxyAttribute
-                    //where newobj may produce null
+                    // NOTE: there are cases involving ProxyAttribute
+                    // where newobj may produce null
                     return true;
 
                 case BoundKind.Conversion:
@@ -1262,13 +1263,13 @@ namespace Microsoft.CodeAnalysis.CSharp.CodeGen
                     switch (conversion.ConversionKind)
                     {
                         case ConversionKind.Boxing:
-                            //NOTE: boxing can produce null for Nullable, but any call through that
-                            //will result in null reference exceptions anyways.
+                            // NOTE: boxing can produce null for Nullable, but any call through that
+                            // will result in null reference exceptions anyways.
                             return true;
 
                         case ConversionKind.MethodGroup:
                         case ConversionKind.AnonymousFunction:
-                            return true;
+                            throw ExceptionUtilities.UnexpectedValue(conversion.ConversionKind);
 
                         case ConversionKind.ExplicitReference:
                         case ConversionKind.ImplicitReference:
@@ -1277,9 +1278,19 @@ namespace Microsoft.CodeAnalysis.CSharp.CodeGen
                     break;
 
                 case BoundKind.ThisReference:
-                    //NOTE: these actually can be null if called from a different language
-                    //if that has already happen, we will just propagate the behavior.
+                    // NOTE: these actually can be null if called from a different language
+                    // however, we assume it is responsibility of the caller to nullcheck "this"
+                    // if we already have access to "this", we must be in a member and should 
+                    // not redo the check
                     return true;
+
+                case BoundKind.FieldAccess:
+                    // same reason as for "ThisReference"
+                    return ((BoundFieldAccess)receiver).FieldSymbol.IsCapturedFrame;
+
+                case BoundKind.Local:
+                    // same reason as for "ThisReference"
+                    return ((BoundLocal)receiver).LocalSymbol.SynthesizedKind == SynthesizedLocalKind.FrameCache;
 
                 case BoundKind.DelegateCreationExpression:
                     return true;
@@ -1294,9 +1305,6 @@ namespace Microsoft.CodeAnalysis.CSharp.CodeGen
 
                 case BoundKind.TypeOfOperator:
                     return true;
-
-                case BoundKind.FieldAccess:
-                    return ((BoundFieldAccess)receiver).FieldSymbol.IsCapturedFrame;
 
                 case BoundKind.ConditionalReceiver:
                     return true;
@@ -1915,12 +1923,19 @@ namespace Microsoft.CodeAnalysis.CSharp.CodeGen
             {
                 // It is desirable to do in-place ctor call if possible.
                 // we could do newobj/stloc, but in-place call 
-                // produces same or better code in current JITs 
+                // produces the same or better code in current JITs 
                 if (PartialCtorResultCannotEscape(left))
                 {
                     var objCreation = (BoundObjectCreationExpression)right;
-                    InPlaceCtorCall(left, objCreation, used);
-                    return true;
+                    var ctor = objCreation.Constructor;
+
+                    // ctor can possibly see its own assignments indirectly if there are ref parameters or __arglist
+                    if (System.Linq.ImmutableArrayExtensions.All(ctor.Parameters, p => p.RefKind == RefKind.None) &&
+                        !ctor.IsVararg)
+                    {
+                        InPlaceCtorCall(left, objCreation, used);
+                        return true;
+                    }
                 }
             }
 
@@ -2615,7 +2630,7 @@ namespace Microsoft.CodeAnalysis.CSharp.CodeGen
             if (used)
             {
                 // default type parameter values must be emitted as 'initobj' regardless of constraints
-                if (!type.IsTypeParameter())
+                if (!type.IsTypeParameter() && type.SpecialType != SpecialType.System_Decimal)
                 {
                     var constantValue = type.GetDefaultValue();
                     if (constantValue != null)
@@ -2629,7 +2644,7 @@ namespace Microsoft.CodeAnalysis.CSharp.CodeGen
             }
         }
 
-        private void EmitDefaultExpression(BoundDefaultOperator expression, bool used)
+        private void EmitDefaultExpression(BoundDefaultExpression expression, bool used)
         {
             Debug.Assert(expression.Type.SpecialType == SpecialType.System_Decimal ||
                 expression.Type.GetDefaultValue() == null, "constant should be set on this expression");
@@ -2711,7 +2726,17 @@ namespace Microsoft.CodeAnalysis.CSharp.CodeGen
             Debug.Assert(node.Method.IsDefinition);
             Debug.Assert(node.Type.SpecialType == SpecialType.System_Int32);
             _builder.EmitOpCode(ILOpCode.Ldtoken);
-            EmitSymbolToken(node.Method, node.Syntax, null, encodeAsRawDefinitionToken: true);
+
+            // For partial methods, we emit pseudo token based on the symbol for the partial
+            // definition part as opposed to the symbol for the partial implementation part.
+            // We will need to resolve the symbol associated with each pseudo token in order
+            // to compute the real method definition tokens later. For partial methods, this
+            // resolution can only succeed if the associated symbol is the symbol for the
+            // partial definition and not the symbol for the partial implementation (see
+            // MethodSymbol.ResolvedMethodImpl()).
+            var symbol = node.Method.PartialDefinitionPart ?? node.Method;
+
+            EmitSymbolToken(symbol, node.Syntax, null, encodeAsRawDefinitionToken: true);
         }
 
         private void EmitMaximumMethodDefIndexExpression(BoundMaximumMethodDefIndex node)
@@ -3001,10 +3026,11 @@ namespace Microsoft.CodeAnalysis.CSharp.CodeGen
                 case BoundKind.Conversion:
                     var conversion = (BoundConversion)expr;
                     var conversionKind = conversion.ConversionKind;
-                    if (conversionKind.IsImplicitConversion() &&
-                        conversionKind != ConversionKind.MethodGroup &&
-                        conversionKind != ConversionKind.NullLiteral)
+                    Debug.Assert(conversionKind != ConversionKind.DefaultOrNullLiteral);
+
+                    if (conversionKind.IsImplicitConversion())
                     {
+                        Debug.Assert(conversionKind != ConversionKind.MethodGroup);
                         return StackMergeType(conversion.Operand);
                     }
                     break;

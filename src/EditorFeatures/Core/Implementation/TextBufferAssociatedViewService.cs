@@ -1,4 +1,4 @@
-// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+﻿// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
 using System;
 using System.Collections.Generic;
@@ -38,8 +38,7 @@ namespace Microsoft.CodeAnalysis.Editor
                 // only add roslyn type to tracking map
                 foreach (var buffer in subjectBuffers.Where(b => IsSupportedContentType(b.ContentType)))
                 {
-                    HashSet<IWpfTextView> set;
-                    if (!s_map.TryGetValue(buffer, out set))
+                    if (!s_map.TryGetValue(buffer, out var set))
                     {
                         set = new HashSet<IWpfTextView>();
                         s_map.Add(buffer, set);
@@ -60,8 +59,7 @@ namespace Microsoft.CodeAnalysis.Editor
                 // for example, if content type of a buffer changed, we will be called after it is changed, rather than before it.
                 foreach (var buffer in subjectBuffers)
                 {
-                    HashSet<IWpfTextView> set;
-                    if (s_map.TryGetValue(buffer, out set))
+                    if (s_map.TryGetValue(buffer, out var set))
                     {
                         set.Remove(textView);
                         if (set.Count == 0)
@@ -84,8 +82,7 @@ namespace Microsoft.CodeAnalysis.Editor
         {
             lock (s_gate)
             {
-                HashSet<IWpfTextView> set;
-                if (!s_map.TryGetValue(textBuffer, out set))
+                if (!s_map.TryGetValue(textBuffer, out var set))
                 {
                     return SpecializedCollections.EmptyList<IWpfTextView>();
                 }
@@ -141,8 +138,7 @@ namespace Microsoft.CodeAnalysis.Editor
             {
                 foreach (var buffer in view.BufferGraph.GetTextBuffers(b => IsSupportedContentType(b.ContentType)))
                 {
-                    HashSet<IWpfTextView> set;
-                    if (s_map.TryGetValue(buffer, out set))
+                    if (s_map.TryGetValue(buffer, out var set))
                     {
                         Contract.ThrowIfTrue(set.Contains(view));
                     }

@@ -1,4 +1,4 @@
-// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+﻿// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
 using System.Collections.Generic;
 using System.Collections.Immutable;
@@ -164,7 +164,8 @@ namespace Microsoft.VisualStudio.LanguageServices.Implementation.ChangeSignature
                 SymbolDisplayMemberOptions.IncludeType |
                 SymbolDisplayMemberOptions.IncludeExplicitInterface |
                 SymbolDisplayMemberOptions.IncludeAccessibility |
-                SymbolDisplayMemberOptions.IncludeModifiers);
+                SymbolDisplayMemberOptions.IncludeModifiers |
+                SymbolDisplayMemberOptions.IncludeRef);
 
         private static SymbolDisplayFormat s_parameterDisplayFormat = new SymbolDisplayFormat(
             genericsOptions: SymbolDisplayGenericsOptions.IncludeTypeParameters,

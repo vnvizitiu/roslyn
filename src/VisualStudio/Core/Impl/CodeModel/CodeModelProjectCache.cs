@@ -1,4 +1,4 @@
-// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+﻿// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
 using System;
 using System.Collections.Generic;
@@ -45,8 +45,7 @@ namespace Microsoft.VisualStudio.LanguageServices.Implementation.CodeModel
         {
             lock (_cacheGate)
             {
-                CacheEntry cacheEntry;
-                if (_cache.TryGetValue(fileName, out cacheEntry))
+                if (_cache.TryGetValue(fileName, out var cacheEntry))
                 {
                     return cacheEntry;
                 }
@@ -192,8 +191,7 @@ namespace Microsoft.VisualStudio.LanguageServices.Implementation.CodeModel
 
             lock (_cacheGate)
             {
-                CacheEntry cacheEntry;
-                if (_cache.TryGetValue(fileName, out cacheEntry))
+                if (_cache.TryGetValue(fileName, out var cacheEntry))
                 {
                     comHandle = cacheEntry.ComHandle;
                     _cache.Remove(fileName);
@@ -213,8 +211,7 @@ namespace Microsoft.VisualStudio.LanguageServices.Implementation.CodeModel
 
             lock (_cacheGate)
             {
-                CacheEntry cacheEntry;
-                if (_cache.TryGetValue(oldFileName, out cacheEntry))
+                if (_cache.TryGetValue(oldFileName, out var cacheEntry))
                 {
                     comHandleToRename = cacheEntry.ComHandle;
 

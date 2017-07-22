@@ -1,4 +1,4 @@
-' Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+﻿' Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
 Imports System.Threading
 Imports Microsoft.CodeAnalysis.Editor.Shared.Utilities
@@ -64,7 +64,7 @@ Namespace Microsoft.CodeAnalysis.Editor.VisualBasic.UnitTests.QuickInfo
         End Function
 
         Protected Async Function TestFromXmlAsync(markup As String, ParamArray expectedResults As Action(Of Object)()) As Task
-            Using workspace = Await TestWorkspace.CreateAsync(markup)
+            Using workspace = TestWorkspace.Create(markup)
                 Await TestSharedAsync(workspace, workspace.Documents.First().CursorPosition.Value, expectedResults)
             End Using
         End Function
@@ -74,7 +74,7 @@ Namespace Microsoft.CodeAnalysis.Editor.VisualBasic.UnitTests.QuickInfo
             Dim position As Integer = Nothing
             MarkupTestFile.GetPosition(markup, code, position)
 
-            Using workspace = Await TestWorkspace.CreateVisualBasicAsync(code, Nothing, metadataReferences:=metadataReferences)
+            Using workspace = TestWorkspace.CreateVisualBasic(code, Nothing, metadataReferences:=metadataReferences)
                 Await TestSharedAsync(workspace, position, expectedResults)
             End Using
         End Function
@@ -566,14 +566,13 @@ End class
         <WorkItem(539240, "http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/539240")>
         <Fact, Trait(Traits.Feature, Traits.Features.QuickInfo)>
         Public Async Function TestOnArrayCreation1() As Task
-            Await TestAsync(<Text>
+            Await TestAsync("
 class C
     Sub Test()
         Dim a As Integer() = N$$ew Integer(3) { }
     End Sub
-End class
-</Text>.NormalizedValue,
-            Nothing)
+End class",
+            MainDescription("Integer()"))
         End Function
 
         <WorkItem(539240, "http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/539240")>

@@ -1,4 +1,4 @@
-// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+﻿// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
 using System;
 using System.Collections.Immutable;
@@ -12,7 +12,7 @@ using Roslyn.Utilities;
 namespace Microsoft.CodeAnalysis.QualifyMemberAccess
 {
     internal abstract class AbstractQualifyMemberAccessDiagnosticAnalyzer<TLanguageKindEnum> :
-        AbstractCodeStyleDiagnosticAnalyzer, IBuiltInAnalyzer
+        AbstractCodeStyleDiagnosticAnalyzer
         where TLanguageKindEnum : struct
     {
         protected AbstractQualifyMemberAccessDiagnosticAnalyzer() 
@@ -22,7 +22,7 @@ namespace Microsoft.CodeAnalysis.QualifyMemberAccess
         {
         }
 
-        public bool OpenFileOnly(Workspace workspace)
+        public override bool OpenFileOnly(Workspace workspace)
         {
             var qualifyFieldAccessOption = workspace.Options.GetOption(CodeStyleOptions.QualifyFieldAccess, GetLanguageName()).Notification;
             var qualifyPropertyAccessOption = workspace.Options.GetOption(CodeStyleOptions.QualifyPropertyAccess, GetLanguageName()).Notification;
@@ -37,6 +37,14 @@ namespace Microsoft.CodeAnalysis.QualifyMemberAccess
 
         protected abstract string GetLanguageName();
 
+        /// <summary>
+        /// Reports on whether the specified member is suitable for qualification. Some member
+        /// access expressions cannot be qualified; for instance if they begin with <c>base.</c>,
+        /// <c>MyBase.</c>, or <c>MyClass.</c>.
+        /// </summary>
+        /// <returns>True if the member access can be qualified; otherwise, False.</returns>
+        protected abstract bool CanMemberAccessBeQualified(SyntaxNode node);
+
         protected abstract bool IsAlreadyQualifiedMemberAccess(SyntaxNode node);
 
         private static MethodInfo s_registerMethod = typeof(AnalysisContext).GetTypeInfo().GetDeclaredMethod("RegisterOperationActionImmutableArrayInternal");
@@ -48,7 +56,7 @@ namespace Microsoft.CodeAnalysis.QualifyMemberAccess
                    ImmutableArray.Create(OperationKind.FieldReferenceExpression, OperationKind.PropertyReferenceExpression, OperationKind.MethodBindingExpression)
                });
 
-        public DiagnosticAnalyzerCategory GetAnalyzerCategory() => DiagnosticAnalyzerCategory.SemanticSpanAnalysis;
+        public override DiagnosticAnalyzerCategory GetAnalyzerCategory() => DiagnosticAnalyzerCategory.SemanticSpanAnalysis;
 
         private void AnalyzeOperation(OperationAnalysisContext context)
         {
@@ -66,14 +74,23 @@ namespace Microsoft.CodeAnalysis.QualifyMemberAccess
                 return;
             }
 
-            // if we can't find a member then we can't do anything
-            if (memberReference.Member == null)
+            // If we can't be qualified (e.g., because we're already qualified with `base.`), we're done.
+            if (!CanMemberAccessBeQualified(memberReference.Instance.Syntax))
             {
                 return;
             }
 
-            // get the option
-            var optionSet = context.Options.GetOptionSet();
+            // if we can't find a member then we can't do anything.  Also, we shouldn't qualify
+            // accesses to static members.  
+            if (memberReference.Member == null ||
+                memberReference.Member.IsStatic)
+            {
+                return;
+            }
+
+            var syntaxTree = context.Operation.Syntax.SyntaxTree;
+            var cancellationToken = context.CancellationToken;
+            var optionSet = context.Options.GetDocumentOptionSetAsync(syntaxTree, cancellationToken).GetAwaiter().GetResult();
             if (optionSet == null)
             {
                 return;
@@ -91,7 +108,7 @@ namespace Microsoft.CodeAnalysis.QualifyMemberAccess
                 if (severity != DiagnosticSeverity.Hidden)
                 {
                     context.ReportDiagnostic(Diagnostic.Create(
-                        CreateDescriptorWithSeverity(severity), 
+                        GetDescriptorWithSeverity(severity), 
                         context.Operation.Syntax.GetLocation()));
                 }
             }
@@ -110,7 +127,7 @@ namespace Microsoft.CodeAnalysis.QualifyMemberAccess
                 case SymbolKind.Event:
                     return CodeStyleOptions.QualifyEventAccess;
                 default:
-                    throw ExceptionUtilities.Unreachable;
+                    throw ExceptionUtilities.UnexpectedValue(symbolKind);
             }
         }
     }

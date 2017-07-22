@@ -1,4 +1,4 @@
-// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+﻿// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
 using System;
 using System.Collections.Generic;
@@ -6,6 +6,7 @@ using System.Collections.Immutable;
 using System.Linq;
 using Microsoft.CodeAnalysis.CSharp.Extensions;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.CodeAnalysis.PooledObjects;
 using Microsoft.CodeAnalysis.Shared.Extensions;
 using Microsoft.CodeAnalysis.Structure;
 using Microsoft.CodeAnalysis.Text;
@@ -18,6 +19,7 @@ namespace Microsoft.CodeAnalysis.CSharp.Structure
         public const string Ellipsis = "...";
         public const string MultiLineCommentSuffix = "*/";
         public const int MaxXmlDocCommentBannerLength = 120;
+        private static readonly char[] s_newLineCharacters = new char[] { '\r', '\n' };
 
         private static int GetCollapsibleStart(SyntaxToken firstToken)
         {
@@ -113,7 +115,7 @@ namespace Microsoft.CodeAnalysis.CSharp.Structure
             }
             else if (comment.IsMultiLineComment())
             {
-                var lineBreakStart = comment.ToString().IndexOfAny(new char[] { '\r', '\n' });
+                var lineBreakStart = comment.ToString().IndexOfAny(s_newLineCharacters);
 
                 var text = comment.ToString();
                 if (lineBreakStart >= 0)
@@ -122,7 +124,9 @@ namespace Microsoft.CodeAnalysis.CSharp.Structure
                 }
                 else
                 {
-                    text = text.EndsWith(MultiLineCommentSuffix) ? text.Substring(0, text.Length - MultiLineCommentSuffix.Length) : text;
+                    text = text.Length >= "/**/".Length && text.EndsWith(MultiLineCommentSuffix) 
+                        ? text.Substring(0, text.Length - MultiLineCommentSuffix.Length)
+                        : text;
                 }
 
                 return CreateCommentBannerTextWithPrefix(text, "/*");

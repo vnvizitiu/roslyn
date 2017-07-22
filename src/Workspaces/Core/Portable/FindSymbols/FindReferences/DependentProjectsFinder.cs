@@ -241,9 +241,7 @@ namespace Microsoft.CodeAnalysis.FindSymbols
                     if (previous != null)
                     {
                         var referencedProject = solution.GetProject(previous.Assembly, cancellationToken);
-                        List<ProjectId> referencingSubmissions = null;
-
-                        if (!projectIdsToReferencingSubmissionIds.TryGetValue(referencedProject.Id, out referencingSubmissions))
+                        if (!projectIdsToReferencingSubmissionIds.TryGetValue(referencedProject.Id, out var referencingSubmissions))
                         {
                             referencingSubmissions = new List<ProjectId>();
                             projectIdsToReferencingSubmissionIds.Add(referencedProject.Id, referencingSubmissions);
@@ -265,9 +263,9 @@ namespace Microsoft.CodeAnalysis.FindSymbols
             {
                 var toProcess = projectIdsToProcess.Pop();
 
-                if (projectIdsToReferencingSubmissionIds.ContainsKey(toProcess))
+                if (projectIdsToReferencingSubmissionIds.TryGetValue(toProcess, out var submissionIds))
                 {
-                    foreach (var pId in projectIdsToReferencingSubmissionIds[toProcess])
+                    foreach (var pId in submissionIds)
                     {
                         if (!dependentProjects.Any(dp => dp.ProjectId == pId))
                         {

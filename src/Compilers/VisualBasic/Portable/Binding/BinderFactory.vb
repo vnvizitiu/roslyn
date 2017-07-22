@@ -3,6 +3,7 @@
 Imports System.Collections.Concurrent
 Imports System.Collections.Generic
 Imports System.Threading
+Imports Microsoft.CodeAnalysis.PooledObjects
 Imports Microsoft.CodeAnalysis.Text
 Imports Microsoft.CodeAnalysis.VisualBasic.Symbols
 Imports Microsoft.CodeAnalysis.VisualBasic.Syntax
@@ -123,7 +124,7 @@ Namespace Microsoft.CodeAnalysis.VisualBasic
             Debug.Assert(containingBinder Is Nothing OrElse parentNode Is Nothing)
 
             Dim binder As Binder = Nothing
-            Dim nodeUsagePair = ValueTuple.Create(node, CByte(usage))
+            Dim nodeUsagePair = (node, CByte(usage))
 
             If Not _cache.TryGetValue(nodeUsagePair, binder) Then
                 ' Didn't find it in the cache, so we need to create it. But we need the containing binder first.
@@ -342,6 +343,7 @@ Namespace Microsoft.CodeAnalysis.VisualBasic
                         Select Case methodSyntax.Kind
                             Case SyntaxKind.SubNewStatement,
                                 SyntaxKind.FunctionStatement,
+                                SyntaxKind.OperatorStatement,
                                 SyntaxKind.SubStatement,
                                 SyntaxKind.DeclareFunctionStatement,
                                 SyntaxKind.DeclareSubStatement

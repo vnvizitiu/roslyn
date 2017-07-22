@@ -1,21 +1,18 @@
-// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+﻿// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
 using System;
 using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CodeGeneration;
-using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.Editing;
-using Microsoft.CodeAnalysis.Editor.UnitTests.Workspaces;
-using Microsoft.CodeAnalysis.Text;
-using Microsoft.CodeAnalysis.VisualBasic;
 using Microsoft.CodeAnalysis.VisualBasic.Syntax;
 using Roslyn.Test.Utilities;
+using Roslyn.Utilities;
 using Xunit;
-using CS = Microsoft.CodeAnalysis.CSharp;
 using VB = Microsoft.CodeAnalysis.VisualBasic;
 
 namespace Microsoft.CodeAnalysis.Editor.UnitTests.CodeGeneration
@@ -92,7 +89,7 @@ Public Class C
     Public Sub GetStates()
 End Sub
 End Class";
-                await TestAddConstructorAsync(input, expected, compareTokens: false);
+                await TestAddConstructorAsync(input, expected, ignoreTrivia: false);
             }
 
             [Fact, Trait(Traits.Feature, Traits.Features.CodeGeneration)]
@@ -128,7 +125,7 @@ End Class";
                 var input = "Class [|C|]\n Public Sub New(i As Integer)\n End Sub\n End Class";
                 var expected = "Class C\n Public Sub New()\n Me.New(42)\n End Sub\n Public Sub New(i As Integer)\n End Sub\n End Class";
                 await TestAddConstructorAsync(input, expected,
-                    thisArguments: new[] { VB.SyntaxFactory.ParseExpression("42") });
+                    thisArguments: ImmutableArray.Create<SyntaxNode>(VB.SyntaxFactory.ParseExpression("42")));
             }
 
             [Fact, Trait(Traits.Feature, Traits.Features.CodeGeneration), WorkItem(544476, "http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/544476")]
@@ -140,7 +137,7 @@ End Class";
     End Class
 End Namespace";
                 await TestAddNamedTypeAsync(input, expected,
-                    compareTokens: false);
+                    ignoreTrivia: false);
             }
 
             [Fact, Trait(Traits.Feature, Traits.Features.CodeGeneration)]
@@ -273,6 +270,122 @@ End Namespace";
             }
 
             [Fact, Trait(Traits.Feature, Traits.Features.CodeGeneration)]
+            public async Task AddEvent()
+            {
+                var input = @"
+Class [|C|]
+End Class";
+                var expected = @"
+Class C
+    Public Event E As Action
+End Class";
+                await TestAddEventAsync(input, expected,
+                    codeGenerationOptions: new CodeGenerationOptions(addImports: false));
+            }
+
+            [Fact, Trait(Traits.Feature, Traits.Features.CodeGeneration)]
+            public async Task AddEventWithAccessorAndImplementsClause()
+            {
+                var input = "Class [|C|] \n End Class";
+                var expected = @"
+Class C
+	Public Custom Event E As ComponentModel.PropertyChangedEventHandler Implements ComponentModel.INotifyPropertyChanged.PropertyChanged
+
+		AddHandler ( value As ComponentModel . PropertyChangedEventHandler )
+		End AddHandler
+
+		RemoveHandler ( value As ComponentModel . PropertyChangedEventHandler ) 
+		End RemoveHandler
+
+		RaiseEvent ( sender As Object , e As ComponentModel . PropertyChangedEventArgs ) 
+		End RaiseEvent
+	End Event
+End Class";
+                ImmutableArray<IEventSymbol> GetExplicitInterfaceEvent(SemanticModel semanticModel)
+                {
+                    var parameterSymbols = SpecializedCollections.EmptyList<AttributeData>();
+                    return ImmutableArray.Create<IEventSymbol>(
+                        new CodeGenerationEventSymbol(
+                            GetTypeSymbol(typeof(System.ComponentModel.INotifyPropertyChanged))(semanticModel), 
+                            default(ImmutableArray<AttributeData>),
+                            Accessibility.Public,
+                            default(DeclarationModifiers),
+                            GetTypeSymbol(typeof(System.ComponentModel.PropertyChangedEventHandler))(semanticModel),
+                            default,
+                            nameof(System.ComponentModel.INotifyPropertyChanged.PropertyChanged), null, null, null));
+                };
+
+                await TestAddEventAsync(input, expected,
+                    addMethod: CodeGenerationSymbolFactory.CreateAccessorSymbol(
+                        ImmutableArray<AttributeData>.Empty, Accessibility.NotApplicable, ImmutableArray<SyntaxNode>.Empty),
+                        getExplicitInterfaceImplementations: GetExplicitInterfaceEvent,
+                        type: typeof(System.ComponentModel.PropertyChangedEventHandler),
+                        codeGenerationOptions: new CodeGenerationOptions(addImports: false));
+            }
+
+            [Fact, Trait(Traits.Feature, Traits.Features.CodeGeneration)]
+            public async Task AddEventWithAddAccessor()
+            {
+                var input = @"
+Class [|C|]
+End Class";
+                var expected = @"
+Class C
+    Public Custom Event E As Action
+
+        AddHandler(value As Action)
+        End AddHandler
+
+        RemoveHandler(value As Action)
+        End RemoveHandler
+
+        RaiseEvent()
+        End RaiseEvent
+
+    End Event
+End Class";
+                await TestAddEventAsync(input, expected,
+                    addMethod: CodeGenerationSymbolFactory.CreateAccessorSymbol(ImmutableArray<AttributeData>.Empty, Accessibility.NotApplicable, ImmutableArray<SyntaxNode>.Empty),
+                    codeGenerationOptions: new CodeGenerationOptions(addImports: false));
+            }
+
+            [Fact, Trait(Traits.Feature, Traits.Features.CodeGeneration)]
+            public async Task AddEventWithAccessors()
+            {
+                var input = @"
+Class [|C|]
+End Class";
+                var expected = @"
+Class C
+    Public Custom Event E As Action
+
+        AddHandler(value As Action)
+            Console.WriteLine(0)
+        End AddHandler
+
+        RemoveHandler(value As Action)
+            Console.WriteLine(1)
+        End RemoveHandler
+
+        RaiseEvent()
+            Console.WriteLine(2)
+        End RaiseEvent
+    End Event
+End Class";
+                var addStatements = ImmutableArray.Create<SyntaxNode>(VB.SyntaxFactory.ParseExecutableStatement("Console.WriteLine(0)"));
+                var removeStatements = ImmutableArray.Create<SyntaxNode>(VB.SyntaxFactory.ParseExecutableStatement("Console.WriteLine(1)"));
+                var raiseStatements = ImmutableArray.Create<SyntaxNode>(VB.SyntaxFactory.ParseExecutableStatement("Console.WriteLine(2)"));
+                await TestAddEventAsync(input, expected,
+                    addMethod: CodeGenerationSymbolFactory.CreateAccessorSymbol(
+                        ImmutableArray<AttributeData>.Empty, Accessibility.NotApplicable, addStatements),
+                    removeMethod: CodeGenerationSymbolFactory.CreateAccessorSymbol(
+                        ImmutableArray<AttributeData>.Empty, Accessibility.NotApplicable, removeStatements),
+                    raiseMethod: CodeGenerationSymbolFactory.CreateAccessorSymbol(
+                        ImmutableArray<AttributeData>.Empty, Accessibility.NotApplicable, raiseStatements),
+                    codeGenerationOptions: new CodeGenerationOptions(addImports: false));
+            }
+
+            [Fact, Trait(Traits.Feature, Traits.Features.CodeGeneration)]
             public async Task AddMethodToClass()
             {
                 var input = "Class [|C|]\n End Class";
@@ -342,7 +455,7 @@ End Namespace";
                 var expected = "Class C\n Public Function M(Of T)() As Integer\n $$ \nEnd Function\n End Class";
                 await TestAddMethodAsync(input, expected,
                     returnType: typeof(int),
-                    typeParameters: new[] { CodeGenerationSymbolFactory.CreateTypeParameterSymbol("T") },
+                    typeParameters: ImmutableArray.Create(CodeGenerationSymbolFactory.CreateTypeParameterSymbol("T")),
                     statements: "Return new T().GetHashCode()");
             }
 
@@ -380,7 +493,7 @@ End Namespace";
                     name: "M",
                     returnType: typeof(void),
                     parameters: Parameters(Parameter(typeof(int), "i")),
-                    explicitInterface: s => s.LookupSymbols(input.IndexOf('M'), null, "M").First() as IMethodSymbol);
+                    getExplicitInterfaces: s => s.LookupSymbols(input.IndexOf('M'), null, "M").OfType<IMethodSymbol>().ToImmutableArray());
             }
 
             [Fact, Trait(Traits.Feature, Traits.Features.CodeGeneration)]
@@ -1135,8 +1248,7 @@ Public Shared Class C
     Public Shared f2 As Integer
 End Class";
                 var getField = CreateField(Accessibility.Public, new DeclarationModifiers(isStatic: true), typeof(int), "f2");
-                var getMembers = new List<Func<SemanticModel, ISymbol>>();
-                getMembers.Add(getField);
+                var getMembers = ImmutableArray.Create(getField);
                 await TestUpdateDeclarationAsync<ClassBlockSyntax>(input, expected, getNewMembers: getMembers);
             }
 

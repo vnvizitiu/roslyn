@@ -11,6 +11,7 @@ using System.Reflection;
 using System.Reflection.Metadata;
 using System.Threading;
 using Microsoft.CodeAnalysis.CSharp.DocumentationComments;
+using Microsoft.CodeAnalysis.PooledObjects;
 using Roslyn.Utilities;
 using Microsoft.CodeAnalysis.CSharp.Emit;
 using Microsoft.CodeAnalysis.Collections;
@@ -464,7 +465,7 @@ namespace Microsoft.CodeAnalysis.CSharp.Symbols.Metadata.PE
                         EntityHandle interfaceHandle = moduleSymbol.Module.MetadataReader.GetInterfaceImplementation(interfaceImpl).Interface;
                         TypeSymbol typeSymbol = tokenDecoder.GetTypeOfToken(interfaceHandle);
 
-                        typeSymbol = TupleTypeDecoder.DecodeTupleTypesIfApplicable(typeSymbol, interfaceHandle, moduleSymbol);
+                        typeSymbol = TupleTypeDecoder.DecodeTupleTypesIfApplicable(typeSymbol, interfaceImpl, moduleSymbol);
 
                         var namedTypeSymbol = typeSymbol as NamedTypeSymbol;
                         symbols[i++] = (object)namedTypeSymbol != null ? namedTypeSymbol : new UnsupportedMetadataTypeSymbol(); // interface tmpList contains a bad type
@@ -1464,7 +1465,7 @@ namespace Microsoft.CodeAnalysis.CSharp.Symbols.Metadata.PE
             }
         }
 
-        internal override bool HasTypeArgumentsCustomModifiers
+        internal sealed override bool HasTypeArgumentsCustomModifiers
         {
             get
             {
@@ -1472,12 +1473,9 @@ namespace Microsoft.CodeAnalysis.CSharp.Symbols.Metadata.PE
             }
         }
 
-        internal override ImmutableArray<ImmutableArray<CustomModifier>> TypeArgumentsCustomModifiers
+        public sealed override ImmutableArray<CustomModifier> GetTypeArgumentCustomModifiers(int ordinal)
         {
-            get
-            {
-                return ImmutableArray<ImmutableArray<CustomModifier>>.Empty;
-            }
+            return GetEmptyTypeArgumentCustomModifiers(ordinal);
         }
 
         public override ImmutableArray<TypeParameterSymbol> TypeParameters
@@ -1821,7 +1819,7 @@ namespace Microsoft.CodeAnalysis.CSharp.Symbols.Metadata.PE
 
                         if (((object)getMethod != null) || ((object)setMethod != null))
                         {
-                            members.Add(new PEPropertySymbol(moduleSymbol, this, propertyDef, getMethod, setMethod));
+                            members.Add(PEPropertySymbol.Create(moduleSymbol, this, propertyDef, getMethod, setMethod));
                         }
                     }
                     catch (BadImageFormatException)
@@ -2281,22 +2279,6 @@ namespace Microsoft.CodeAnalysis.CSharp.Symbols.Metadata.PE
                 {
                     // This is always the instance type, so the type arguments are the same as the type parameters.
                     return this.TypeParameters.Cast<TypeParameterSymbol, TypeSymbol>();
-                }
-            }
-
-            internal override bool HasTypeArgumentsCustomModifiers
-            {
-                get
-                {
-                    return false;
-                }
-            }
-
-            internal override ImmutableArray<ImmutableArray<CustomModifier>> TypeArgumentsCustomModifiers
-            {
-                get
-                {
-                    return CreateEmptyTypeArgumentsCustomModifiers();
                 }
             }
 

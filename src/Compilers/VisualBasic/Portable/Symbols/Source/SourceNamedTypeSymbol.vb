@@ -6,6 +6,7 @@ Imports System.Collections.Immutable
 Imports System.Globalization
 Imports System.Runtime.InteropServices
 Imports System.Threading
+Imports Microsoft.CodeAnalysis.PooledObjects
 Imports Microsoft.CodeAnalysis.Text
 Imports Microsoft.CodeAnalysis.VisualBasic.Symbols
 Imports Microsoft.CodeAnalysis.VisualBasic.Syntax
@@ -2004,7 +2005,7 @@ Namespace Microsoft.CodeAnalysis.VisualBasic.Symbols
             Dim boundAttribute As VisualBasicAttributeData = Nothing
             Dim obsoleteData As ObsoleteAttributeData = Nothing
 
-            If EarlyDecodeDeprecatedOrObsoleteAttribute(arguments, boundAttribute, obsoleteData) Then
+            If EarlyDecodeDeprecatedOrExperimentalOrObsoleteAttribute(arguments, boundAttribute, obsoleteData) Then
                 If obsoleteData IsNot Nothing Then
                     arguments.GetOrCreateData(Of TypeEarlyWellKnownAttributeData)().ObsoleteAttributeData = obsoleteData
                 End If
@@ -2211,7 +2212,8 @@ Namespace Microsoft.CodeAnalysis.VisualBasic.Symbols
 
                 ElseIf attrData.IsTargetAttribute(Me, AttributeDescription.SerializableAttribute) Then
                     arguments.GetOrCreateData(Of CommonTypeWellKnownAttributeData)().HasSerializableAttribute = True
-
+                ElseIf attrData.IsTargetAttribute(Me, AttributeDescription.ExcludeFromCodeCoverageAttribute) Then
+                    arguments.GetOrCreateData(Of CommonTypeWellKnownAttributeData)().HasExcludeFromCodeCoverageAttribute = True
                 ElseIf attrData.IsTargetAttribute(Me, AttributeDescription.SpecialNameAttribute) Then
                     arguments.GetOrCreateData(Of CommonTypeWellKnownAttributeData)().HasSpecialNameAttribute = True
 
@@ -2328,6 +2330,13 @@ Namespace Microsoft.CodeAnalysis.VisualBasic.Symbols
                                                                  diagnostics)
             End If
         End Sub
+
+        Friend NotOverridable Overrides ReadOnly Property IsDirectlyExcludedFromCodeCoverage As Boolean
+            Get
+                Dim data = GetDecodedWellKnownAttributeData()
+                Return data IsNot Nothing AndAlso data.HasExcludeFromCodeCoverageAttribute
+            End Get
+        End Property
 
         Friend NotOverridable Overrides ReadOnly Property HasSpecialName As Boolean
             Get

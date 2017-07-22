@@ -7,6 +7,7 @@ using System.Diagnostics;
 using System.Linq;
 using Microsoft.CodeAnalysis.CSharp.Symbols;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.CodeAnalysis.PooledObjects;
 using Roslyn.Utilities;
 
 namespace Microsoft.CodeAnalysis.CSharp
@@ -265,7 +266,10 @@ namespace Microsoft.CodeAnalysis.CSharp
             }
         }
 
-        private AnalyzedAttributeArguments BindAttributeArguments(AttributeArgumentListSyntax attributeArgumentList, NamedTypeSymbol attributeType, DiagnosticBag diagnostics)
+        private AnalyzedAttributeArguments BindAttributeArguments(
+            AttributeArgumentListSyntax attributeArgumentList,
+            NamedTypeSymbol attributeType,
+            DiagnosticBag diagnostics)
         {
             var boundConstructorArguments = AnalyzedArguments.GetInstance();
             var boundNamedArguments = ImmutableArray<BoundExpression>.Empty;
@@ -279,10 +283,17 @@ namespace Microsoft.CodeAnalysis.CSharp
                 // matching Dev10 compiler behavior.
                 bool hadError = false;
 
+                var shouldHaveName = false;
+
                 foreach (var argument in attributeArgumentList.Arguments)
                 {
                     if (argument.NameEquals == null)
                     {
+                        if (shouldHaveName)
+                        {
+                            diagnostics.Add(ErrorCode.ERR_NamedArgumentExpected, argument.Expression.GetLocation());
+                        }
+
                         // Constructor argument
                         hadError |= this.BindArgumentAndName(
                             boundConstructorArguments,
@@ -302,6 +313,8 @@ namespace Microsoft.CodeAnalysis.CSharp
                     }
                     else
                     {
+                        shouldHaveName = true;
+
                         // Named argument
                         // TODO: use fully qualified identifier name for boundNamedArgumentsSet
                         string argumentName = argument.NameEquals.Name.Identifier.ValueText;

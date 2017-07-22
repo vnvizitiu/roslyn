@@ -1,4 +1,4 @@
-' Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+﻿' Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
 Imports System.Threading
 Imports System.Threading.Tasks
@@ -10,7 +10,7 @@ Imports Roslyn.Utilities
 Namespace Microsoft.VisualStudio.LanguageServices.UnitTests.Help
     Public Class HelpTests
         Public Async Function TestAsync(markup As String, expected As String) As Tasks.Task
-            Using workspace = Await TestWorkspace.CreateVisualBasicAsync(markup)
+            Using workspace = TestWorkspace.CreateVisualBasic(markup)
                 Dim caret = workspace.Documents.First().CursorPosition
                 Dim service = New VisualBasicHelpContextService()
                 Assert.Equal(expected, Await service.GetHelpTermAsync(workspace.CurrentSolution.Projects.First().Documents.First(), workspace.Documents.First().SelectedSpans.First(), CancellationToken.None))

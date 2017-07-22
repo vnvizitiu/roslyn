@@ -118,6 +118,11 @@ Namespace Microsoft.CodeAnalysis.VisualBasic
                     If invokeMethod.ReturnsVoid Then
                         AddKeyword(SyntaxKind.SubKeyword)
                     Else
+                        If invokeMethod.ReturnsByRef AndAlso format.MemberOptions.IncludesOption(SymbolDisplayMemberOptions.IncludeRef) Then
+                            AddKeyword(SyntaxKind.ByRefKeyword)
+                            AddSpace()
+                        End If
+
                         AddKeyword(SyntaxKind.FunctionKeyword)
                     End If
 
@@ -201,7 +206,7 @@ Namespace Microsoft.CodeAnalysis.VisualBasic
             ElseIf (symbol.IsTupleType) Then
                 ' If top level tuple uses non-default names, there is no way to preserve them
                 ' unless we use tuple syntax for the type. So, we give them priority.
-                If HasNonDefaultTupleElementNames(symbol) OrElse CanUseTupleTypeName(symbol) Then
+                If HasNonDefaultTupleElements(symbol) OrElse CanUseTupleTypeName(symbol) Then
                     AddTupleTypeName(symbol)
                     Return
                 End If
@@ -283,10 +288,7 @@ Namespace Microsoft.CodeAnalysis.VisualBasic
                     End While
                     AddPunctuation(SyntaxKind.CloseParenToken)
                 Else
-                    ' TODO: Rewrite access to custom modifiers in terms of an interface
-                    AddTypeArguments(symbol.TypeArguments,
-                                     If(Me.format.CompilerInternalOptions.IncludesOption(SymbolDisplayCompilerInternalOptions.IncludeCustomModifiers),
-                                        TryCast(symbol, NamedTypeSymbol)?.TypeArgumentsCustomModifiers, Nothing).GetValueOrDefault())
+                    AddTypeArguments(symbol.TypeArguments, symbol)
                 End If
             End If
 
@@ -328,11 +330,15 @@ Namespace Microsoft.CodeAnalysis.VisualBasic
         Private Shared Function CanUseTupleTypeName(tupleSymbol As INamedTypeSymbol) As Boolean
             Dim currentUnderlying As INamedTypeSymbol = tupleSymbol.TupleUnderlyingType
 
+            If currentUnderlying.Arity = 1 Then
+                Return False
+            End If
+
             While currentUnderlying.Arity = TupleTypeSymbol.RestPosition
                 tupleSymbol = DirectCast(currentUnderlying.TypeArguments(TupleTypeSymbol.RestPosition - 1), INamedTypeSymbol)
                 Debug.Assert(tupleSymbol.IsTupleType)
 
-                If HasNonDefaultTupleElementNames(tupleSymbol) Then
+                If HasNonDefaultTupleElements(tupleSymbol) Then
                     Return False
                 End If
 
@@ -342,46 +348,33 @@ Namespace Microsoft.CodeAnalysis.VisualBasic
             Return True
         End Function
 
-        Private Shared Function HasNonDefaultTupleElementNames(tupleSymbol As INamedTypeSymbol) As Boolean
-            Dim elementNames = tupleSymbol.TupleElementNames
-
-            If Not elementNames.IsDefault Then
-                For i As Integer = 0 To elementNames.Length - 1
-                    If (elementNames(i) <> TupleTypeSymbol.TupleMemberName(i + 1)) Then
-                        Return True
-                    End If
-                Next
-            End If
-
-            Return False
+        Private Shared Function HasNonDefaultTupleElements(tupleSymbol As INamedTypeSymbol) As Boolean
+            Return tupleSymbol.TupleElements.Any(Function(e) Not e.IsDefaultTupleElement)
         End Function
 
         Private Sub AddTupleTypeName(symbol As INamedTypeSymbol)
             Debug.Assert(symbol.IsTupleType)
 
-            Dim elementTypes As ImmutableArray(Of ITypeSymbol) = symbol.TupleElementTypes
-            Dim elementNames As ImmutableArray(Of String) = symbol.TupleElementNames
-            Dim hasNames As Boolean = Not elementNames.IsDefault
+            Dim elements As ImmutableArray(Of IFieldSymbol) = symbol.TupleElements
 
             AddPunctuation(SyntaxKind.OpenParenToken)
 
-            For i As Integer = 0 To elementTypes.Length - 1
+            For i As Integer = 0 To elements.Length - 1
+                Dim element = elements(i)
+
                 If i <> 0 Then
                     AddPunctuation(SyntaxKind.CommaToken)
                     AddSpace()
                 End If
 
-                If hasNames Then
-                    Dim name = elementNames(i)
-                    If name IsNot Nothing Then
-                        builder.Add(CreatePart(SymbolDisplayPartKind.FieldName, symbol, name, noEscaping:=False))
-                        AddSpace()
-                        AddPunctuation(SyntaxKind.AsKeyword)
-                        AddSpace()
-                    End If
+                If Not element.IsImplicitlyDeclared Then
+                    builder.Add(CreatePart(SymbolDisplayPartKind.FieldName, symbol, element.Name, noEscaping:=False))
+                    AddSpace()
+                    AddPunctuation(SyntaxKind.AsKeyword)
+                    AddSpace()
                 End If
 
-                elementTypes(i).Accept(Me.NotFirstVisitor)
+                element.Type.Accept(Me.NotFirstVisitor)
             Next
 
             AddPunctuation(SyntaxKind.CloseParenToken)
@@ -461,7 +454,7 @@ Namespace Microsoft.CodeAnalysis.VisualBasic
         End Sub
 
         Private Sub AddTypeArguments(typeArguments As ImmutableArray(Of ITypeSymbol),
-                                     Optional modifiers As ImmutableArray(Of ImmutableArray(Of CustomModifier)) = Nothing)
+                                     Optional modifiersSource As INamedTypeSymbol = Nothing)
             AddPunctuation(SyntaxKind.OpenParenToken)
             AddKeyword(SyntaxKind.OfKeyword)
             AddSpace()
@@ -489,8 +482,8 @@ Namespace Microsoft.CodeAnalysis.VisualBasic
                     typeArg.Accept(Me.NotFirstVisitor())
                 End If
 
-                If Not modifiers.IsDefaultOrEmpty Then
-                    AddCustomModifiersIfRequired(modifiers(i))
+                If modifiersSource IsNot Nothing Then
+                    AddCustomModifiersIfRequired(modifiersSource.GetTypeArgumentCustomModifiers(i))
                 End If
             Next
 

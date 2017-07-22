@@ -101,7 +101,7 @@ namespace Microsoft.CodeAnalysis
                 ProjectState newProject,
                 CompilationTranslationAction translate = null,
                 bool clone = false,
-                CancellationToken cancellationToken = default(CancellationToken))
+                CancellationToken cancellationToken = default)
             {
                 var state = this.ReadState();
 
@@ -156,10 +156,7 @@ namespace Microsoft.CodeAnalysis
 
             public CompilationTracker FreezePartialStateWithTree(SolutionState solution, DocumentState docState, SyntaxTree tree, CancellationToken cancellationToken)
             {
-                ProjectState inProgressProject;
-                Compilation inProgressCompilation;
-
-                GetPartialCompilationState(solution, docState.Id, out inProgressProject, out inProgressCompilation, cancellationToken);
+                GetPartialCompilationState(solution, docState.Id, out var inProgressProject, out var inProgressCompilation, cancellationToken);
 
                 if (!inProgressCompilation.SyntaxTrees.Contains(tree))
                 {
@@ -300,8 +297,7 @@ namespace Microsoft.CodeAnalysis
 
             public Task<Compilation> GetCompilationAsync(SolutionState solution, CancellationToken cancellationToken)
             {
-                Compilation compilation;
-                if (this.TryGetCompilation(out compilation))
+                if (this.TryGetCompilation(out var compilation))
                 {
                     // PERF: This is a hot code path and Task<TResult> isn't cheap,
                     // so cache the completed tasks to reduce allocations. We also
@@ -311,9 +307,14 @@ namespace Microsoft.CodeAnalysis
                 }
                 else
                 {
-                    return GetOrBuildCompilationInfoAsync(solution, lockGate: true, cancellationToken: cancellationToken)
-                        .ContinueWith(t => t.Result.Compilation, cancellationToken, TaskContinuationOptions.ExecuteSynchronously | TaskContinuationOptions.OnlyOnRanToCompletion, TaskScheduler.Default);
+                    return GetCompilationSlowAsync(solution, cancellationToken);
                 }
+            }
+
+            private async Task<Compilation> GetCompilationSlowAsync(SolutionState solution, CancellationToken cancellationToken)
+            {
+                var compilationInfo = await GetOrBuildCompilationInfoAsync(solution, lockGate: true, cancellationToken: cancellationToken).ConfigureAwait(false);
+                return compilationInfo.Compilation;
             }
 
             private static string LogBuildCompilationAsync(ProjectState state)
@@ -359,10 +360,10 @@ namespace Microsoft.CodeAnalysis
                             // we have full declaration, just use it.
                             return state.Compilation.GetValue(cancellationToken);
                         }
-                        else if (state is InProgressState)
+                        else if (state is InProgressState inProgress)
                         {
                             // We have an in progress compilation.  Build off of that.
-                            return await BuildDeclarationCompilationFromInProgressAsync(solution, state as InProgressState, compilation, cancellationToken).ConfigureAwait(false);
+                            return await BuildDeclarationCompilationFromInProgressAsync(solution, inProgress, compilation, cancellationToken).ConfigureAwait(false);
                         }
                         else
                         {
@@ -457,10 +458,10 @@ namespace Microsoft.CodeAnalysis
                     // We have a declaration compilation, use it to reconstruct the final compilation
                     return this.FinalizeCompilationAsync(solution, compilation, cancellationToken);
                 }
-                else if (state is InProgressState)
+                else if (state is InProgressState inProgress)
                 {
                     // We have an in progress compilation.  Build off of that.
-                    return BuildFinalStateFromInProgressStateAsync(solution, state as InProgressState, compilation, cancellationToken);
+                    return BuildFinalStateFromInProgressStateAsync(solution, inProgress, compilation, cancellationToken);
                 }
                 else
                 {
@@ -506,7 +507,7 @@ namespace Microsoft.CodeAnalysis
 
             private Compilation CreateEmptyCompilation()
             {
-                var compilationFactory = this.ProjectState.LanguageServices.GetService<ICompilationFactoryService>();
+                var compilationFactory = this.ProjectState.LanguageServices.GetRequiredService<ICompilationFactoryService>();
 
                 if (this.ProjectState.IsSubmission)
                 {
@@ -726,11 +727,10 @@ namespace Microsoft.CodeAnalysis
             {
                 try
                 {
-                    Compilation compilation;
 
                     // if we already have the compilation and its right kind then use it.
                     if (this.ProjectState.LanguageServices == fromProject.LanguageServices
-                        && this.TryGetCompilation(out compilation))
+                        && this.TryGetCompilation(out var compilation))
                     {
                         return compilation.ToMetadataReference(projectReference.Aliases, projectReference.EmbedInteropTypes);
                     }
@@ -762,10 +762,8 @@ namespace Microsoft.CodeAnalysis
             public MetadataReference GetPartialMetadataReference(SolutionState solution, ProjectState fromProject, ProjectReference projectReference, CancellationToken cancellationToken)
             {
                 var state = this.ReadState();
-
                 // get compilation in any state it happens to be in right now.
-                Compilation compilation;
-                if (state.Compilation.TryGetValue(out compilation)
+                if (state.Compilation.TryGetValue(out var compilation)
                     && compilation != null
                     && this.ProjectState.LanguageServices == fromProject.LanguageServices)
                 {
@@ -790,12 +788,9 @@ namespace Microsoft.CodeAnalysis
 
                         // get or build compilation up to declaration state. this compilation will be used to provide live xml doc comment
                         var declarationCompilation = await this.GetOrBuildDeclarationCompilationAsync(solution, cancellationToken: cancellationToken).ConfigureAwait(false);
-
-                        MetadataReference reference;
-
                         solution.Workspace.LogTestMessage($"Looking for a cached skeleton assembly for {projectReference.ProjectId} before taking the lock...");
 
-                        if (!MetadataOnlyReference.TryGetReference(solution, projectReference, declarationCompilation, version, out reference))
+                        if (!MetadataOnlyReference.TryGetReference(solution, projectReference, declarationCompilation, version, out var reference))
                         {
                             // using async build lock so we don't get multiple consumers attempting to build metadata-only images for the same compilation.
                             using (await _buildLock.DisposableWaitAsync(cancellationToken).ConfigureAwait(false))
@@ -864,9 +859,14 @@ namespace Microsoft.CodeAnalysis
                 }
                 else
                 {
-                    return GetOrBuildCompilationInfoAsync(solution, lockGate: true, cancellationToken: cancellationToken)
-                        .ContinueWith(t => t.Result.HasSuccessfullyLoadedTransitively, cancellationToken, TaskContinuationOptions.ExecuteSynchronously | TaskContinuationOptions.OnlyOnRanToCompletion, TaskScheduler.Default);
+                    return HasSuccessfullyLoadedSlowAsync(solution, cancellationToken);
                 }
+            }
+
+            private async Task<bool> HasSuccessfullyLoadedSlowAsync(SolutionState solution, CancellationToken cancellationToken)
+            {
+                var compilationInfo = await GetOrBuildCompilationInfoAsync(solution, lockGate: true, cancellationToken: cancellationToken).ConfigureAwait(false);
+                return compilationInfo.HasSuccessfullyLoadedTransitively;
             }
 
             #region Versions

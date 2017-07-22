@@ -1,4 +1,4 @@
-' Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+﻿' Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
 Imports System.Threading
 Imports System.Threading.Tasks
@@ -18,7 +18,7 @@ Namespace Microsoft.VisualStudio.LanguageServices.VisualBasic.UnitTests.Debuggin
             Dim position As Integer
             MarkupTestFile.GetPosition(text, text, position)
             Dim compilationOptions = If(rootNamespace IsNot Nothing, New VisualBasicCompilationOptions(OutputKind.DynamicallyLinkedLibrary, rootNamespace:=rootNamespace), Nothing)
-            Using workspace = Await TestWorkspace.CreateAsync(LanguageNames.VisualBasic, compilationOptions, parseOptions, text)
+            Using workspace = TestWorkspace.Create(LanguageNames.VisualBasic, compilationOptions, parseOptions, text)
                 Dim locationInfo = Await LocationInfoGetter.GetInfoAsync(
                     workspace.CurrentSolution.Projects.Single().Documents.Single(),
                     position,

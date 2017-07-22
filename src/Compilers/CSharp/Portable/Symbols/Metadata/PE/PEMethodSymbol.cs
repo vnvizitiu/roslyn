@@ -9,6 +9,7 @@ using System.Threading;
 using System.Reflection;
 using System.Reflection.Metadata;
 using Microsoft.CodeAnalysis.CSharp.DocumentationComments;
+using Microsoft.CodeAnalysis.PooledObjects;
 using Roslyn.Utilities;
 
 namespace Microsoft.CodeAnalysis.CSharp.Symbols.Metadata.PE
@@ -501,6 +502,8 @@ namespace Microsoft.CodeAnalysis.CSharp.Symbols.Metadata.PE
 
         public override ImmutableArray<CustomModifier> ReturnTypeCustomModifiers => Signature.ReturnParam.CustomModifiers;
 
+        public override ImmutableArray<CustomModifier> RefCustomModifiers => Signature.ReturnParam.RefCustomModifiers;
+
         /// <summary>
         /// Associate the method with a particular property. Returns
         /// false if the method is already associated with a property or event.
@@ -553,7 +556,7 @@ namespace Microsoft.CodeAnalysis.CSharp.Symbols.Metadata.PE
 
             SignatureHeader signatureHeader;
             BadImageFormatException mrEx;
-            ParamInfo<TypeSymbol>[] paramInfo = new MetadataDecoder(moduleSymbol, this).GetSignatureForMethod(_handle, out signatureHeader, out mrEx, allowByRefReturn: true);
+            ParamInfo<TypeSymbol>[] paramInfo = new MetadataDecoder(moduleSymbol, this).GetSignatureForMethod(_handle, out signatureHeader, out mrEx);
             bool makeBad = (mrEx != null);
 
             // If method is not generic, let's assign empty list for type parameters
@@ -792,24 +795,6 @@ namespace Microsoft.CodeAnalysis.CSharp.Symbols.Metadata.PE
                 this.ParameterCount == parameterCount &&
                 this.ParameterRefKinds.IsDefault && // No 'ref' or 'out'
                 !this.IsParams();
-
-        private bool IsValidUserDefinedOperatorIs()
-        {
-            foreach (var parameter in this.Parameters)
-            {
-                if (parameter.RefKind != ((parameter.Ordinal == 0) ? RefKind.None : RefKind.Out))
-                {
-                    return false;
-                }
-            }
-
-            return
-                (this.ReturnsVoid || this.ReturnType.SpecialType == SpecialType.System_Boolean) &&
-                !this.IsGenericMethod &&
-                !this.IsVararg &&
-                this.ParameterCount > 0 &&
-                !this.IsParams();
-        }
 
         private MethodKind ComputeMethodKind()
         {

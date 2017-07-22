@@ -1,4 +1,4 @@
-' Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+﻿' Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
 Imports Microsoft.CodeAnalysis.Editor.Implementation.Interactive
 Imports Microsoft.CodeAnalysis.Editor.UnitTests
@@ -3363,11 +3363,11 @@ End Namespace"
             <WpfFact>
             <Trait(Traits.Feature, Traits.Features.ExtractMethod)>
             <Trait(Traits.Feature, Traits.Features.Interactive)>
-            Public Async Function TestExtractMethodCommandDisabledInSubmission() As Task
+            Public Sub TestExtractMethodCommandDisabledInSubmission()
                 Dim exportProvider = MinimalTestExportProvider.CreateExportProvider(
                 TestExportProvider.EntireAssemblyCatalogWithCSharpAndVisualBasic.WithParts(GetType(InteractiveDocumentSupportsFeatureService)))
 
-                Using workspace = Await TestWorkspace.CreateAsync(
+                Using workspace = TestWorkspace.Create(
                 <Workspace>
                     <Submission Language="Visual Basic" CommonReferences="true">  
                         GetType(String).$$Name
@@ -3397,7 +3397,7 @@ End Namespace"
                     Assert.True(delegatedToNext)
                     Assert.False(state.IsAvailable)
                 End Using
-            End Function
+            End Sub
         End Class
     End Class
 End Namespace

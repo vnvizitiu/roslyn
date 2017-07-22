@@ -646,7 +646,7 @@ Module M
 End Module
 ]]></file>
                            </compilation>
-            Dim reference1 = CompileIL(sources1, appendDefaultHeader:=False, embedInteropTypes:=True)
+            Dim reference1 = CompileIL(sources1, prependDefaultHeader:=False, embedInteropTypes:=True)
             Dim compilation2 = CreateCompilationWithMscorlibAndVBRuntimeAndReferences(sources2, additionalRefs:={reference1})
             VerifyEmitDiagnostics(compilation2, <errors>
 BC31561: Embedded interop method 'Sub D.M1()' contains a body.
@@ -1298,7 +1298,7 @@ End Class
 
                                                            Dim signatureHeader As SignatureHeader = Nothing
                                                            Dim mrEx As BadImageFormatException = Nothing
-                                                           Dim paramInfo = New MetadataDecoder(DirectCast([module], PEModuleSymbol), itest17).GetSignatureForMethod(gapMethodDef, allowByRefReturn:=False, signatureHeader:=signatureHeader, metadataException:=mrEx)
+                                                           Dim paramInfo = New MetadataDecoder(DirectCast([module], PEModuleSymbol), itest17).GetSignatureForMethod(gapMethodDef, signatureHeader:=signatureHeader, metadataException:=mrEx)
                                                            Assert.Null(mrEx)
                                                            Assert.Equal(CByte(SignatureCallingConvention.Default) Or CByte(SignatureAttributes.Instance), signatureHeader.RawValue)
                                                            Assert.Equal(1, paramInfo.Length)
@@ -4248,7 +4248,7 @@ BC35000: Requested operation is not available because the runtime library functi
     End Class
 ]]></file>
                            </compilation>
-            Dim reference1 = CompileIL(sources1, appendDefaultHeader:=False, embedInteropTypes:=True)
+            Dim reference1 = CompileIL(sources1, prependDefaultHeader:=False, embedInteropTypes:=True)
             CompileAndVerify(sources2, additionalRefs:={reference1}, symbolValidator:=
                                                 Sub([module] As ModuleSymbol)
                                                     DirectCast([module], PEModuleSymbol).Module.PretendThereArentNoPiaLocalTypes()
@@ -4319,7 +4319,7 @@ BC35000: Requested operation is not available because the runtime library functi
     End Class
 ]]></file>
                            </compilation>
-            Dim reference1 = CompileIL(sources1, appendDefaultHeader:=False, embedInteropTypes:=True)
+            Dim reference1 = CompileIL(sources1, prependDefaultHeader:=False, embedInteropTypes:=True)
             CompileAndVerify(sources2, additionalRefs:={reference1}, symbolValidator:=
                                                 Sub([module] As ModuleSymbol)
                                                     DirectCast([module], PEModuleSymbol).Module.PretendThereArentNoPiaLocalTypes()

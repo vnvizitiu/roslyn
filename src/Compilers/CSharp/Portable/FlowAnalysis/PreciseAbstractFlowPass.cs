@@ -7,6 +7,7 @@ using System.Linq;
 using System.Text;
 using Microsoft.CodeAnalysis.Collections;
 using Microsoft.CodeAnalysis.CSharp.Symbols;
+using Microsoft.CodeAnalysis.PooledObjects;
 using Microsoft.CodeAnalysis.Text;
 using Roslyn.Utilities;
 
@@ -546,6 +547,10 @@ namespace Microsoft.CodeAnalysis.CSharp
                         break;
                     }
 
+                case BoundKind.TupleLiteral:
+                    ((BoundTupleExpression)node).VisitAllElements((x, self) => self.VisitLvalue(x), this);
+                    break;
+
                 default:
                     VisitRvalue(node);
                     break;
@@ -797,11 +802,6 @@ namespace Microsoft.CodeAnalysis.CSharp
                 labelStateChanged = true;
                 _labels[label] = state;
             }
-        }
-
-        private bool ResolveBranches(BoundLabeledStatement target)
-        {
-            return ResolveBranches(target.Label, target);
         }
 
         protected struct SavedPending
@@ -1144,10 +1144,21 @@ namespace Microsoft.CodeAnalysis.CSharp
 
         public override BoundNode VisitBlock(BoundBlock node)
         {
-            foreach (var statement in node.Statements)
+            VisitStatements(node.Statements);
+            return null;
+        }
+
+        private void VisitStatements(ImmutableArray<BoundStatement> statements)
+        {
+            foreach (var statement in statements)
             {
                 VisitStatement(statement);
             }
+        }
+
+        public override BoundNode VisitScope(BoundScope node)
+        {
+            VisitStatements(node.Statements);
             return null;
         }
 
@@ -1664,19 +1675,8 @@ namespace Microsoft.CodeAnalysis.CSharp
 
         public override BoundNode VisitDeconstructionAssignmentOperator(BoundDeconstructionAssignmentOperator node)
         {
-            foreach (BoundExpression variable in node.LeftVariables)
-            {
-                VisitLvalue(variable);
-            }
-
+            VisitLvalue(node.Left);
             VisitRvalue(node.Right);
-
-            return null;
-        }
-
-        public override BoundNode VisitLocalDeconstructionDeclaration(BoundLocalDeconstructionDeclaration node)
-        {
-            VisitDeconstructionAssignmentOperator(node.Assignment);
             return null;
         }
 
@@ -1920,7 +1920,7 @@ namespace Microsoft.CodeAnalysis.CSharp
                         right = udBinOp.Right;
                         break;
                     default:
-                        throw ExceptionUtilities.Unreachable;
+                        throw ExceptionUtilities.UnexpectedValue(binary.Kind);
                 }
 
                 var op = kind.Operator();
@@ -2128,7 +2128,7 @@ namespace Microsoft.CodeAnalysis.CSharp
             VisitRvalue(node.Expression);
             var breakState = this.State.Clone();
             LoopHead(node);
-            VisitForEachIterationVariable(node);
+            VisitForEachIterationVariables(node);
             VisitStatement(node.Body);
             ResolveContinues(node.ContinueLabel);
             LoopTail(node);
@@ -2136,7 +2136,7 @@ namespace Microsoft.CodeAnalysis.CSharp
             return null;
         }
 
-        public virtual void VisitForEachIterationVariable(BoundForEachStatement node)
+        public virtual void VisitForEachIterationVariables(BoundForEachStatement node)
         {
         }
 
@@ -2493,7 +2493,7 @@ namespace Microsoft.CodeAnalysis.CSharp
             return null;
         }
 
-        public override BoundNode VisitDefaultOperator(BoundDefaultOperator node)
+        public override BoundNode VisitDefaultExpression(BoundDefaultExpression node)
         {
             return null;
         }
@@ -2515,7 +2515,7 @@ namespace Microsoft.CodeAnalysis.CSharp
 
         public override BoundNode VisitAddressOfOperator(BoundAddressOfOperator node)
         {
-            VisitAddressOfOperator(node, shouldReadOperand: false);
+            VisitAddressOfOperand(node.Operand, shouldReadOperand: false);
             return null;
         }
 
@@ -2523,10 +2523,8 @@ namespace Microsoft.CodeAnalysis.CSharp
         /// If the operand is definitely assigned, we may want to perform a read (in addition to
         /// a write) so that the operand can show up as ReadInside/DataFlowsIn.
         /// </summary>
-        protected void VisitAddressOfOperator(BoundAddressOfOperator node, bool shouldReadOperand)
+        protected void VisitAddressOfOperand(BoundExpression operand, bool shouldReadOperand)
         {
-            BoundExpression operand = node.Operand;
-
             if (shouldReadOperand)
             {
                 this.VisitRvalue(operand);
@@ -2697,7 +2695,7 @@ namespace Microsoft.CodeAnalysis.CSharp
             throw ExceptionUtilities.Unreachable;
         }
 
-        public override BoundNode VisitVoid(BoundVoid node)
+        public override BoundNode VisitDiscardExpression(BoundDiscardExpression node)
         {
             return null;
         }

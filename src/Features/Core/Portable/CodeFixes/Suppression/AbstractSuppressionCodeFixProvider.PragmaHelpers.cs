@@ -90,7 +90,7 @@ namespace Microsoft.CodeAnalysis.CodeFixes.Suppression
 
                 triviaAtIndex = index >= 0 && index < triviaList.Length ?
                     triviaList[index] :
-                    default(SyntaxTrivia);
+                    default;
 
                 return index;
             }
@@ -104,8 +104,7 @@ namespace Microsoft.CodeAnalysis.CodeFixes.Suppression
                 bool isRemoveSuppression = false)
             {
                 var trivia = startToken.LeadingTrivia.ToImmutableArray();
-                SyntaxTrivia insertAfterTrivia;
-                var index = GetPositionForPragmaInsertion(trivia, currentDiagnosticSpan, fixer, isStartToken: true, triviaAtIndex: out insertAfterTrivia);
+                var index = GetPositionForPragmaInsertion(trivia, currentDiagnosticSpan, fixer, isStartToken: true, triviaAtIndex: out var insertAfterTrivia);
                 index++;
 
                 bool needsLeadingEOL;
@@ -166,8 +165,7 @@ namespace Microsoft.CodeAnalysis.CodeFixes.Suppression
                     trivia = endToken.TrailingTrivia.ToImmutableArray();
                 }
 
-                SyntaxTrivia insertBeforeTrivia;
-                var index = GetPositionForPragmaInsertion(trivia, currentDiagnosticSpan, fixer, isStartToken: false, triviaAtIndex: out insertBeforeTrivia);
+                var index = GetPositionForPragmaInsertion(trivia, currentDiagnosticSpan, fixer, isStartToken: false, triviaAtIndex: out var insertBeforeTrivia);
 
                 bool needsTrailingEOL;
                 if (index < trivia.Length)
@@ -209,7 +207,7 @@ namespace Microsoft.CodeAnalysis.CodeFixes.Suppression
                 var isEndTokenEOF = fixer.IsEndOfFileToken(endToken);
 
                 var previousOfStart = startToken.GetPreviousToken(includeZeroWidth: true);
-                var nextOfEnd = !isEndTokenEOF ? endToken.GetNextToken(includeZeroWidth: true) : default(SyntaxToken);
+                var nextOfEnd = !isEndTokenEOF ? endToken.GetNextToken(includeZeroWidth: true) : default;
                 if (!previousOfStart.HasTrailingTrivia && !nextOfEnd.HasLeadingTrivia)
                 {
                     return;

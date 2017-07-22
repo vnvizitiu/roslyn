@@ -2,6 +2,7 @@
 
 using System.Collections.Generic;
 using System.Diagnostics;
+using Microsoft.CodeAnalysis.PooledObjects;
 using Microsoft.CodeAnalysis.SymbolDisplay;
 using Roslyn.Utilities;
 
@@ -177,6 +178,13 @@ namespace Microsoft.CodeAnalysis.CSharp
 
         public override void VisitLocal(ILocalSymbol symbol)
         {
+            if (symbol.IsRef && 
+                format.LocalOptions.IncludesOption(SymbolDisplayLocalOptions.IncludeRef))
+            {
+                AddKeyword(SyntaxKind.RefKeyword);
+                AddSpace();
+            }
+
             if (format.LocalOptions.IncludesOption(SymbolDisplayLocalOptions.IncludeType))
             {
                 symbol.Type.Accept(this);
@@ -196,6 +204,17 @@ namespace Microsoft.CodeAnalysis.CSharp
 
                 AddConstantValue(symbol.Type, symbol.ConstantValue);
             }
+        }
+
+        public override void VisitDiscard(IDiscardSymbol symbol)
+        {
+            if (format.LocalOptions.IncludesOption(SymbolDisplayLocalOptions.IncludeType))
+            {
+                symbol.Type.Accept(this);
+                AddSpace();
+            }
+
+            builder.Add(CreatePart(SymbolDisplayPartKind.Punctuation, symbol, "_"));
         }
 
         public override void VisitRangeVariable(IRangeVariableSymbol symbol)

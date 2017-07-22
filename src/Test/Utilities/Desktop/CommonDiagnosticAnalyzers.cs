@@ -385,6 +385,24 @@ namespace Microsoft.CodeAnalysis
         }
 
         [DiagnosticAnalyzer(LanguageNames.CSharp, LanguageNames.VisualBasic)]
+        public sealed class AnalyzerWithDisabledRules : DiagnosticAnalyzer
+        {
+            public static readonly DiagnosticDescriptor Rule = new DiagnosticDescriptor(
+                "ID1",
+                "Title1",
+                "Message1",
+                "Category1",
+                defaultSeverity: DiagnosticSeverity.Warning,
+                isEnabledByDefault: false);
+
+            public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics => ImmutableArray.Create(Rule);
+            public override void Initialize(AnalysisContext context)
+            {
+                context.RegisterSymbolAction(_ => { }, SymbolKind.NamedType);
+            }
+        }
+
+        [DiagnosticAnalyzer(LanguageNames.CSharp, LanguageNames.VisualBasic)]
         public sealed class EnsureNoMergedNamespaceSymbolAnalyzer : DiagnosticAnalyzer
         {
             public const string DiagnosticId = nameof(DiagnosticId);
@@ -440,6 +458,25 @@ namespace Microsoft.CodeAnalysis
                 context.RegisterCompilationAction(compilationContext =>
                     compilationContext.ReportDiagnostic(Diagnostic.Create(Descriptor, Location.None)));
             }
+        }
+
+        [DiagnosticAnalyzer(LanguageNames.CSharp, LanguageNames.VisualBasic)]
+        public sealed class AnalyzerWithInvalidDiagnosticSpan : DiagnosticAnalyzer
+        {
+            private readonly TextSpan _badSpan;
+
+            public static readonly DiagnosticDescriptor Descriptor = new DiagnosticDescriptor(
+                "ID",
+                "Title1",
+                "Message",
+                "Category1",
+                defaultSeverity: DiagnosticSeverity.Warning,
+                isEnabledByDefault: true);
+
+            public AnalyzerWithInvalidDiagnosticSpan(TextSpan badSpan) => _badSpan = badSpan;
+            public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics => ImmutableArray.Create(Descriptor);
+            public override void Initialize(AnalysisContext context)
+                => context.RegisterSyntaxTreeAction(c => c.ReportDiagnostic(Diagnostic.Create(Descriptor, SourceLocation.Create(c.Tree, _badSpan))));
         }
 
         [DiagnosticAnalyzer(LanguageNames.CSharp, LanguageNames.VisualBasic)]
@@ -714,7 +751,7 @@ namespace Microsoft.CodeAnalysis
 
         /// <summary>
         /// This analyzer will report diagnostics only if it receives any concurrent action callbacks, which would be a
-        /// bug in the analyzer driver as this analyzer doesn't invoke <see cref="AnalysisContext.RegisterConcurrentExecution"/>.
+        /// bug in the analyzer driver as this analyzer doesn't invoke <see cref="AnalysisContext.EnableConcurrentExecution"/>.
         /// </summary>
         [DiagnosticAnalyzer(LanguageNames.CSharp, LanguageNames.VisualBasic)]
         public class NonConcurrentAnalyzer : DiagnosticAnalyzer

@@ -7,6 +7,7 @@ using System.Linq;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.Diagnostics;
 using Microsoft.CodeAnalysis.Editor;
+using Microsoft.CodeAnalysis.PooledObjects;
 using Microsoft.CodeAnalysis.Shared.Extensions;
 using Microsoft.CodeAnalysis.Text;
 using Microsoft.VisualStudio.LanguageServices.Implementation.ProjectSystem;
@@ -73,8 +74,7 @@ namespace Microsoft.VisualStudio.LanguageServices.Implementation.TableDataSource
                 return ImmutableArray<ITrackingPoint>.Empty;
             }
 
-            SourceText text;
-            if (!document.TryGetText(out text))
+            if (!document.TryGetText(out var text))
             {
                 return ImmutableArray<ITrackingPoint>.Empty;
             }

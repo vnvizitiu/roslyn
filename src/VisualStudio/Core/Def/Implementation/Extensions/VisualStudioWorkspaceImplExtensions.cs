@@ -1,4 +1,4 @@
-// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+﻿// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
 using System;
 using System.Collections.Generic;
@@ -52,8 +52,7 @@ namespace Microsoft.VisualStudio.LanguageServices.Implementation.Extensions
                 var imageListData = Microsoft.Internal.VisualStudio.PlatformUI.Utilities.GetObjectData(uiObject) as IVsUIWin32ImageList;
                 if (imageListData != null)
                 {
-                    int imageListInt;
-                    if (ErrorHandler.Succeeded(imageListData.GetHIMAGELIST(out imageListInt)))
+                    if (ErrorHandler.Succeeded(imageListData.GetHIMAGELIST(out var imageListInt)))
                     {
                         imageList = (IntPtr)imageListInt;
                         index = 0;
@@ -62,15 +61,14 @@ namespace Microsoft.VisualStudio.LanguageServices.Implementation.Extensions
                 }
             }
 
-            imageList = default(IntPtr);
+            imageList = default;
             index = 0;
             return false;
         }
 
         public static bool TryGetImageListAndIndex(this VisualStudioWorkspaceImpl workspace, IVsImageService2 imageService, ProjectId id, out IntPtr imageList, out int index)
         {
-            ushort ushortIndex;
-            var result = TryGetImageListAndIndex(workspace, imageService, id, out imageList, out ushortIndex);
+            var result = TryGetImageListAndIndex(workspace, imageService, id, out imageList, out ushort ushortIndex);
 
             index = ushortIndex;
             return result;
@@ -84,7 +82,7 @@ namespace Microsoft.VisualStudio.LanguageServices.Implementation.Extensions
                 return TryGetImageListAndIndex(hierarchy, imageService, VSConstants.VSITEMID_ROOT, out imageList, out index);
             }
 
-            imageList = default(IntPtr);
+            imageList = default;
             index = 0;
             return false;
         }
@@ -99,7 +97,7 @@ namespace Microsoft.VisualStudio.LanguageServices.Implementation.Extensions
                 return TryGetImageListAndIndex(hierarchy, imageService, itemId, out imageList, out index);
             }
 
-            imageList = default(IntPtr);
+            imageList = default;
             index = 0;
             return false;
         }

@@ -1,4 +1,4 @@
-// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+﻿// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
 using Microsoft.CodeAnalysis.Editor.Shared.Extensions;
 using Microsoft.CodeAnalysis.Text;
@@ -169,9 +169,7 @@ namespace Microsoft.CodeAnalysis.Editor.UnitTests.Extensions
         public void GetLineAndColumnTest()
         {
             var snapshot = GetSampleCodeSnapshot();
-            int line;
-            int col;
-            snapshot.GetLineAndColumn(16, out line, out col);
+            snapshot.GetLineAndColumn(16, out var line, out var col);
             Assert.Equal(3, line);
             Assert.Equal(1, col);
         }

@@ -1,4 +1,4 @@
-' Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+﻿' Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
 Imports Microsoft.CodeAnalysis.Completion
 Imports Microsoft.CodeAnalysis.Editor.UnitTests.Workspaces
@@ -22,11 +22,11 @@ Namespace Microsoft.CodeAnalysis.Editor.VisualBasic.UnitTests.Completion.Complet
         End Function
 
         <Fact(), Trait(Traits.Feature, Traits.Features.KeywordRecommending)>
-        Public Async Function IsTextualTriggerCharacterTest() As Task
-            Await TestCommonIsTextualTriggerCharacterAsync()
+        Public Sub IsTextualTriggerCharacterTest()
+            TestCommonIsTextualTriggerCharacter()
 
-            Await VerifyTextualTriggerCharacterAsync("foo$$(", shouldTriggerWithTriggerOnLettersEnabled:=True, shouldTriggerWithTriggerOnLettersDisabled:=True)
-        End Function
+            VerifyTextualTriggerCharacter("foo$$(", shouldTriggerWithTriggerOnLettersEnabled:=True, shouldTriggerWithTriggerOnLettersDisabled:=True)
+        End Sub
 
         <Fact(), Trait(Traits.Feature, Traits.Features.KeywordRecommending)>
         Public Async Function SendEnterThroughToEditorTest() As Task

@@ -20,6 +20,7 @@ using Microsoft.CodeAnalysis.Host;
 using Microsoft.CodeAnalysis.Host.Mef;
 using Microsoft.CodeAnalysis.LanguageServices;
 using Microsoft.CodeAnalysis.Options;
+using Microsoft.CodeAnalysis.PooledObjects;
 using Microsoft.CodeAnalysis.Rename;
 using Microsoft.CodeAnalysis.Rename.ConflictEngine;
 using Microsoft.CodeAnalysis.Shared.Extensions;
@@ -80,7 +81,7 @@ namespace Microsoft.CodeAnalysis.CSharp.Rename
 
             private int _skipRenameForComplexification;
             private bool _isProcessingComplexifiedSpans;
-            private List<ValueTuple<TextSpan, TextSpan>> _modifiedSubSpans;
+            private List<(TextSpan oldSpan, TextSpan newSpan)> _modifiedSubSpans;
             private SemanticModel _speculativeModel;
             private int _isProcessingTrivia;
 
@@ -94,7 +95,7 @@ namespace Microsoft.CodeAnalysis.CSharp.Rename
                 }
                 else
                 {
-                    _modifiedSubSpans.Add(ValueTuple.Create(oldSpan, newSpan));
+                    _modifiedSubSpans.Add((oldSpan, newSpan));
                 }
             }
 
@@ -156,9 +157,9 @@ namespace Microsoft.CodeAnalysis.CSharp.Rename
                 // a previous node, we'll handle it accordingly.
                 if (shouldComplexifyNode)
                 {
-                    _skipRenameForComplexification += shouldComplexifyNode ? 1 : 0;
+                    _skipRenameForComplexification++;
                     result = base.Visit(node);
-                    _skipRenameForComplexification -= shouldComplexifyNode ? 1 : 0;
+                    _skipRenameForComplexification--;
                     result = Complexify(node, result);
                 }
                 else
@@ -215,7 +216,8 @@ namespace Microsoft.CodeAnalysis.CSharp.Rename
                     isRenameLocation ||
                     token.ValueText == _replacementText ||
                     isOldText ||
-                    _possibleNameConflicts.Contains(token.ValueText);
+                    _possibleNameConflicts.Contains(token.ValueText) ||
+                    IsPossiblyDestructorConflict(token, _replacementText);
 
                 if (tokenNeedsConflictCheck)
                 {
@@ -230,10 +232,17 @@ namespace Microsoft.CodeAnalysis.CSharp.Rename
                 return newToken;
             }
 
+            private bool IsPossiblyDestructorConflict(SyntaxToken token, string replacementText)
+            {
+                return _replacementText == "Finalize" &&
+                    token.IsKind(SyntaxKind.IdentifierToken) && 
+                    token.Parent.IsKind(SyntaxKind.DestructorDeclaration);
+            }
+
             private SyntaxNode Complexify(SyntaxNode originalNode, SyntaxNode newNode)
             {
                 _isProcessingComplexifiedSpans = true;
-                _modifiedSubSpans = new List<ValueTuple<TextSpan, TextSpan>>();
+                _modifiedSubSpans = new List<(TextSpan oldSpan, TextSpan newSpan)>();
 
                 var annotation = new SyntaxAnnotation();
                 newNode = newNode.WithAdditionalAnnotations(annotation);
@@ -355,9 +364,8 @@ namespace Microsoft.CodeAnalysis.CSharp.Rename
                         var sourceDefinition = await SymbolFinder.FindSourceDefinitionAsync(symbol, _solution, _cancellationToken).ConfigureAwait(false);
                         symbol = sourceDefinition ?? symbol;
 
-                        if (symbol is INamedTypeSymbol)
+                        if (symbol is INamedTypeSymbol namedTypeSymbol)
                         {
-                            var namedTypeSymbol = (INamedTypeSymbol)symbol;
                             if (namedTypeSymbol.IsImplicitlyDeclared &&
                                 namedTypeSymbol.IsDelegateType() &&
                                 namedTypeSymbol.AssociatedSymbol != null)
@@ -456,7 +464,7 @@ namespace Microsoft.CodeAnalysis.CSharp.Rename
                     break;
                 }
 
-                if (identifierToken != default(SyntaxToken) && !_annotatedIdentifierTokens.Contains(identifierToken))
+                if (identifierToken != default && !_annotatedIdentifierTokens.Contains(identifierToken))
                 {
                     var symbolInfo = _semanticModel.GetSymbolInfo(invocationExpression, _cancellationToken);
                     IEnumerable<ISymbol> symbols = null;
@@ -562,8 +570,7 @@ namespace Microsoft.CodeAnalysis.CSharp.Rename
                 {
                     if (oldIdentifier != _renamedSymbol.Name)
                     {
-                        string withoutSuffix;
-                        if (currentNewIdentifier.TryGetWithoutAttributeSuffix(out withoutSuffix))
+                        if (currentNewIdentifier.TryGetWithoutAttributeSuffix(out var withoutSuffix))
                         {
                             currentNewIdentifier = withoutSuffix;
                         }
@@ -1236,9 +1243,9 @@ namespace Microsoft.CodeAnalysis.CSharp.Rename
                 {
                     nodeToSpeculate = ((TypeConstraintSyntax)node).Type;
                 }
-                else if (node is BaseTypeSyntax)
+                else if (node is BaseTypeSyntax baseType)
                 {
-                    nodeToSpeculate = ((BaseTypeSyntax)node).Type;
+                    nodeToSpeculate = baseType.Type;
                 }
                 else
                 {

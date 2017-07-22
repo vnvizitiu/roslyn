@@ -1,6 +1,6 @@
-// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+﻿// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
-using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -8,6 +8,7 @@ using Microsoft.CodeAnalysis.Classification;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Test.Utilities;
 using Microsoft.CodeAnalysis.Editor.UnitTests.Workspaces;
+using Microsoft.CodeAnalysis.PooledObjects;
 using Microsoft.CodeAnalysis.Shared.Extensions;
 using Microsoft.CodeAnalysis.Text;
 using Roslyn.Test.Utilities;
@@ -17,19 +18,19 @@ namespace Microsoft.CodeAnalysis.Editor.CSharp.UnitTests.Classification
 {
     public partial class SyntacticClassifierTests : AbstractCSharpClassifierTests
     {
-        internal override async Task<IEnumerable<ClassifiedSpan>> GetClassificationSpansAsync(string code, TextSpan textSpan, CSharpParseOptions options)
+        internal override async Task<ImmutableArray<ClassifiedSpan>> GetClassificationSpansAsync(string code, TextSpan textSpan, CSharpParseOptions options)
         {
-            using (var workspace = await TestWorkspace.CreateCSharpAsync(code, parseOptions: options))
+            using (var workspace = TestWorkspace.CreateCSharp(code, parseOptions: options))
             {
                 var snapshot = workspace.Documents.First().TextBuffer.CurrentSnapshot;
                 var document = workspace.CurrentSolution.Projects.First().Documents.First();
                 var tree = await document.GetSyntaxTreeAsync();
 
-                var service = document.GetLanguageService<IClassificationService>();
-                var result = new List<ClassifiedSpan>();
+                var service = document.GetLanguageService<ISyntaxClassificationService>();
+                var result = ArrayBuilder<ClassifiedSpan>.GetInstance();
                 service.AddSyntacticClassifications(tree, textSpan, result, CancellationToken.None);
 
-                return result;
+                return result.ToImmutableAndFree();
             }
         }
 
@@ -3976,6 +3977,39 @@ void M()
                 Punctuation.Colon,
                 Number("2"),
                 Punctuation.CloseParen);
+        }
+
+        [Fact, Trait(Traits.Feature, Traits.Features.Classification)]
+        public async Task TestConflictMarkers1()
+        {
+            await TestAsync(
+@"class C
+{
+<<<<<<< Start
+    public void Foo();
+=======
+    public void Bar();
+>>>>>>> End
+}",
+                Keyword("class"),
+                Class("C"),
+                Punctuation.OpenCurly,
+                Comment("<<<<<<< Start"),
+                Keyword("public"),
+                Keyword("void"),
+                Identifier("Foo"),
+                Punctuation.OpenParen,
+                Punctuation.CloseParen,
+                Punctuation.Semicolon,
+                Comment("======="),
+                Keyword("public"),
+                Keyword("void"),
+                Identifier("Bar"),
+                Punctuation.OpenParen,
+                Punctuation.CloseParen,
+                Punctuation.Semicolon,
+                Comment(">>>>>>> End"),
+                Punctuation.CloseCurly);
         }
     }
 }

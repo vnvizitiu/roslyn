@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using Microsoft.CodeAnalysis.PooledObjects;
 using Roslyn.Utilities;
 
 namespace Microsoft.CodeAnalysis.CSharp.Symbols
@@ -118,8 +119,8 @@ namespace Microsoft.CodeAnalysis.CSharp.Symbols
 
         internal override bool HasTypeArgumentsCustomModifiers => false;
 
-        internal override ImmutableArray<ImmutableArray<CustomModifier>> TypeArgumentsCustomModifiers => CreateEmptyTypeArgumentsCustomModifiers();
-
+        public override ImmutableArray<CustomModifier> GetTypeArgumentCustomModifiers(int ordinal) => GetEmptyTypeArgumentCustomModifiers(ordinal);
+ 
         public override ImmutableArray<Symbol> GetMembers()
         {
             Symbol constructor = this.Constructor;

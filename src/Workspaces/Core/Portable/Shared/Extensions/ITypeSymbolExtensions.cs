@@ -19,6 +19,9 @@ namespace Microsoft.CodeAnalysis.Shared.Extensions
         private const string DefaultParameterName = "p";
         private const string DefaultBuiltInParameterName = "v";
 
+        public static bool CanAddNullCheck(this ITypeSymbol type)
+            => type != null && (type.IsReferenceType || type.IsNullable());
+
         public static IList<INamedTypeSymbol> GetAllInterfacesIncludingThis(this ITypeSymbol type)
         {
             var allInterfaces = type.AllInterfaces;
@@ -45,9 +48,7 @@ namespace Microsoft.CodeAnalysis.Shared.Extensions
         }
 
         public static bool IsNullable(this ITypeSymbol symbol)
-        {
-            return symbol?.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T;
-        }
+            => symbol?.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T;
 
         public static bool IsErrorType(this ITypeSymbol symbol)
         {
@@ -182,10 +183,7 @@ namespace Microsoft.CodeAnalysis.Shared.Extensions
 
                     if (seenTypeDeclaringInterface)
                     {
-                        var result = constructedInterfaceMember.TypeSwitch(
-                            (IEventSymbol eventSymbol) => FindImplementations(currentType, eventSymbol, workspace, e => e.ExplicitInterfaceImplementations),
-                            (IMethodSymbol methodSymbol) => FindImplementations(currentType, methodSymbol, workspace, m => m.ExplicitInterfaceImplementations),
-                            (IPropertySymbol propertySymbol) => FindImplementations(currentType, propertySymbol, workspace, p => p.ExplicitInterfaceImplementations));
+                        var result = FindImplementations(workspace, constructedInterfaceMember, currentType);
 
                         if (result != null)
                         {
@@ -195,6 +193,18 @@ namespace Microsoft.CodeAnalysis.Shared.Extensions
                     }
                 }
             }
+        }
+
+        private static ISymbol FindImplementations(Workspace workspace, ISymbol constructedInterfaceMember, ITypeSymbol currentType)
+        {
+            switch (constructedInterfaceMember)
+            {
+                case IEventSymbol eventSymbol: return FindImplementations(currentType, eventSymbol, workspace, e => e.ExplicitInterfaceImplementations);
+                case IMethodSymbol methodSymbol: return FindImplementations(currentType, methodSymbol, workspace, m => m.ExplicitInterfaceImplementations);
+                case IPropertySymbol propertySymbol: return FindImplementations(currentType, propertySymbol, workspace, p => p.ExplicitInterfaceImplementations);
+            }
+
+            return null;
         }
 
         private static HashSet<INamedTypeSymbol> GetOriginalInterfacesAndTheirBaseInterfaces(
@@ -526,11 +536,13 @@ namespace Microsoft.CodeAnalysis.Shared.Extensions
 
         public static bool ContainsAnonymousType(this ITypeSymbol symbol)
         {
-            return symbol.TypeSwitch(
-                (IArrayTypeSymbol a) => ContainsAnonymousType(a.ElementType),
-                (IPointerTypeSymbol p) => ContainsAnonymousType(p.PointedAtType),
-                (INamedTypeSymbol n) => ContainsAnonymousType(n),
-                _ => false);
+            switch (symbol)
+            {
+                case IArrayTypeSymbol a: return ContainsAnonymousType(a.ElementType);
+                case IPointerTypeSymbol p: return ContainsAnonymousType(p.PointedAtType);
+                case INamedTypeSymbol n: return ContainsAnonymousType(n);
+                default: return false;
+            }
         }
 
         private static bool ContainsAnonymousType(INamedTypeSymbol type)
@@ -627,7 +639,9 @@ namespace Microsoft.CodeAnalysis.Shared.Extensions
         {
             return
                 typeSymbol.AllInterfaces.Any(i => i.SpecialType == SpecialType.System_Collections_IEnumerable) &&
-                typeSymbol.GetAccessibleMembersInThisAndBaseTypes<IMethodSymbol>(within ?? typeSymbol).Where(s => s.Name == WellKnownMemberNames.CollectionInitializerAddMethodName)
+                typeSymbol.GetBaseTypesAndThis()
+                    .Union(typeSymbol.GetOriginalInterfacesAndTheirBaseInterfaces())
+                    .SelectAccessibleMembers<IMethodSymbol>(WellKnownMemberNames.CollectionInitializerAddMethodName, within ?? typeSymbol)
                     .OfType<IMethodSymbol>()
                     .Any(m => m.Parameters.Any());
         }
@@ -670,9 +684,7 @@ namespace Microsoft.CodeAnalysis.Shared.Extensions
                 return ImmutableArray<T>.Empty;
             }
 
-            var types = containingType.GetBaseTypesAndThis();
-            return types.SelectMany(x => x.GetMembers().OfType<T>().Where(m => m.IsAccessibleWithin(within)))
-                        .ToImmutableArray();
+            return containingType.GetBaseTypesAndThis().SelectAccessibleMembers<T>(within).ToImmutableArray();
         }
 
         public static bool? AreMoreSpecificThan(this IList<ITypeSymbol> t1, IList<ITypeSymbol> t2)
@@ -708,6 +720,26 @@ namespace Microsoft.CodeAnalysis.Shared.Extensions
             }
 
             return result;
+        }
+
+        private static IEnumerable<T> SelectAccessibleMembers<T>(this IEnumerable<ITypeSymbol> types, ISymbol within) where T : class, ISymbol
+        {
+            if (types == null)
+            {
+                return ImmutableArray<T>.Empty;
+            }
+
+            return types.SelectMany(x => x.GetMembers().OfType<T>().Where(m => m.IsAccessibleWithin(within)));
+        }
+
+        private static IEnumerable<T> SelectAccessibleMembers<T>(this IEnumerable<ITypeSymbol> types, string memberName, ISymbol within) where T : class, ISymbol
+        {
+            if (types == null)
+            {
+                return ImmutableArray<T>.Empty;
+            }
+
+            return types.SelectMany(x => x.GetMembers(memberName).OfType<T>().Where(m => m.IsAccessibleWithin(within)));
         }
 
         private static bool? IsMoreSpecificThan(this ITypeSymbol t1, ITypeSymbol t2)

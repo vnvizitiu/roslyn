@@ -4678,6 +4678,36 @@ End Class
                 SymbolDisplayPartKind.Punctuation)
         End Sub
 
+        <WorkItem(18311, "https://github.com/dotnet/roslyn/issues/18311")>
+        <Fact()>
+        Public Sub TupleWith1Arity()
+            TestSymbolDescription(
+                <compilation>
+                    <file name="a.vb">
+Imports System
+Class C
+    Private f As ValueTuple(Of Integer)
+End Class
+                    </file>
+                </compilation>,
+                FindSymbol("C.f"),
+                New SymbolDisplayFormat(memberOptions:=SymbolDisplayMemberOptions.IncludeType,
+                                        genericsOptions:=SymbolDisplayGenericsOptions.IncludeTypeParameters),
+                "f As ValueTuple(Of Int32)",
+                0,
+                {SymbolDisplayPartKind.FieldName,
+                SymbolDisplayPartKind.Space,
+                SymbolDisplayPartKind.Keyword,
+                SymbolDisplayPartKind.Space,
+                SymbolDisplayPartKind.ClassName,
+                SymbolDisplayPartKind.Punctuation,
+                SymbolDisplayPartKind.Keyword,
+                SymbolDisplayPartKind.Space,
+                SymbolDisplayPartKind.StructName,
+                SymbolDisplayPartKind.Punctuation},
+                references:={MetadataReference.CreateFromImage(TestResources.NetFX.ValueTuple.tuplelib)})
+        End Sub
+
         <Fact()>
         Public Sub TupleWithNames()
             TestSymbolDescription(
@@ -4945,7 +4975,9 @@ public class C
             If comp.Language = "C#" Then
                 Verify(
                     SymbolDisplay.ToDisplayParts(method, formatWithRef),
-                    "F(Integer) As Integer",
+                    "ByRef F(Integer) As Integer",
+                    SymbolDisplayPartKind.Keyword,
+                    SymbolDisplayPartKind.Space,
                     SymbolDisplayPartKind.MethodName,
                     SymbolDisplayPartKind.Punctuation,
                     SymbolDisplayPartKind.Keyword,
@@ -4957,7 +4989,9 @@ public class C
             Else
                 Verify(
                     SymbolDisplay.ToDisplayParts(method, formatWithRef),
-                    "F(ByRef Integer) As Integer",
+                    "ByRef F(ByRef Integer) As Integer",
+                    SymbolDisplayPartKind.Keyword,
+                    SymbolDisplayPartKind.Space,
                     SymbolDisplayPartKind.MethodName,
                     SymbolDisplayPartKind.Punctuation,
                     SymbolDisplayPartKind.Keyword,
@@ -4973,7 +5007,9 @@ public class C
             ' Property with IncludeRef.
             Verify(
                 SymbolDisplay.ToDisplayParts([property], formatWithRef),
-                "ReadOnly P As Integer",
+                "ReadOnly ByRef P As Integer",
+                SymbolDisplayPartKind.Keyword,
+                SymbolDisplayPartKind.Space,
                 SymbolDisplayPartKind.Keyword,
                 SymbolDisplayPartKind.Space,
                 SymbolDisplayPartKind.PropertyName,
@@ -4987,7 +5023,9 @@ public class C
             If comp.Language = "C#" Then
                 Verify(
                     SymbolDisplay.ToDisplayParts(indexer, formatWithRef),
-                    "ReadOnly this[](Integer) As Integer",
+                    "ReadOnly ByRef this[](Integer) As Integer",
+                    SymbolDisplayPartKind.Keyword,
+                    SymbolDisplayPartKind.Space,
                     SymbolDisplayPartKind.Keyword,
                     SymbolDisplayPartKind.Space,
                     SymbolDisplayPartKind.PropertyName,
@@ -5001,7 +5039,9 @@ public class C
             Else
                 Verify(
                     SymbolDisplay.ToDisplayParts(indexer, formatWithRef),
-                    "ReadOnly Item(Integer) As Integer",
+                    "ReadOnly ByRef Item(Integer) As Integer",
+                    SymbolDisplayPartKind.Keyword,
+                    SymbolDisplayPartKind.Space,
                     SymbolDisplayPartKind.Keyword,
                     SymbolDisplayPartKind.Space,
                     SymbolDisplayPartKind.PropertyName,
@@ -5017,7 +5057,9 @@ public class C
             ' Delegate with IncludeRef.
             Verify(
                 SymbolDisplay.ToDisplayParts([delegate], formatWithRef),
-                "Function D() As Integer",
+                "ByRef Function D() As Integer",
+                SymbolDisplayPartKind.Keyword,
+                SymbolDisplayPartKind.Space,
                 SymbolDisplayPartKind.Keyword,
                 SymbolDisplayPartKind.Space,
                 SymbolDisplayPartKind.DelegateName,

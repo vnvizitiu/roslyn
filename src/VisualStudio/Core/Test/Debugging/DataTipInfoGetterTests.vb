@@ -1,4 +1,4 @@
-' Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+﻿' Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
 Imports System.Threading
 Imports System.Threading.Tasks
@@ -45,7 +45,7 @@ Namespace Microsoft.VisualStudio.LanguageServices.VisualBasic.UnitTests.Debuggin
         End Function
 
         Private Async Function TestSpanGetterAsync(parsedInput As String, position As Integer, continuation As Func(Of Document, Integer, Task)) As Task
-            Using workspace = Await TestWorkspace.CreateVisualBasicAsync(parsedInput)
+            Using workspace = TestWorkspace.CreateVisualBasic(parsedInput)
                 Dim debugInfo = New VisualBasicLanguageDebugInfoService()
                 Await continuation(workspace.CurrentSolution.Projects.First.Documents.First, position)
             End Using

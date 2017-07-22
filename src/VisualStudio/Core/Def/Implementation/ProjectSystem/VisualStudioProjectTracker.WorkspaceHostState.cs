@@ -1,4 +1,4 @@
-// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+﻿// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
 using System;
 using System.Collections.Generic;
@@ -7,6 +7,7 @@ using System.IO;
 using System.Linq;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.Editor.Shared.Utilities;
+using Roslyn.Utilities;
 
 namespace Microsoft.VisualStudio.LanguageServices.Implementation.ProjectSystem
 {
@@ -52,14 +53,13 @@ namespace Microsoft.VisualStudio.LanguageServices.Implementation.ProjectSystem
 
             private void AddToPushListIfNeeded(AbstractProject project, List<AbstractProject> inOrderToPush, HashSet<AbstractProject> visited)
             {
-                AssertIsForeground();
+                AssertIsForeground();                
+                Contract.ThrowIfFalse(_tracker.ContainsProject(project));
 
-                if (_pushedProjects.Contains(project))
-                {
-                    return;
-                }
-
-                if (!visited.Add(project))
+                // Bail out if any of the following is true:
+                //  1. We have already started pushing changes for this project OR
+                //  2. We have already visited this project in a prior recursive call                
+                if (_pushedProjects.Contains(project) || !visited.Add(project))
                 {
                     return;
                 }
@@ -118,13 +118,9 @@ namespace Microsoft.VisualStudio.LanguageServices.Implementation.ProjectSystem
                 if (!_solutionAdded)
                 {
                     string solutionFilePath = null;
-                    VersionStamp? version = default(VersionStamp?);
-
+                    VersionStamp? version = default;
                     // Figure out the solution version
-                    string solutionDirectory;
-                    string solutionFileName;
-                    string userOptsFile;
-                    if (ErrorHandler.Succeeded(_tracker._vsSolution.GetSolutionInfo(out solutionDirectory, out solutionFileName, out userOptsFile)) && solutionFileName != null)
+                    if (ErrorHandler.Succeeded(_tracker._vsSolution.GetSolutionInfo(out var solutionDirectory, out var solutionFileName, out var userOptsFile)) && solutionFileName != null)
                     {
                         solutionFilePath = Path.Combine(solutionDirectory, solutionFileName);
                         if (File.Exists(solutionFilePath))
@@ -143,7 +139,7 @@ namespace Microsoft.VisualStudio.LanguageServices.Implementation.ProjectSystem
 
                     var solutionInfo = SolutionInfo.Create(id, version.Value, solutionFilePath, projects: projectInfos);
 
-                    this.Host.OnSolutionAdded(solutionInfo);
+                    _workspaceHost.OnSolutionAdded(solutionInfo);
 
                     _solutionAdded = true;
                 }

@@ -24,6 +24,7 @@ using System.Text;
 using Microsoft.CodeAnalysis.Collections;
 using Microsoft.CodeAnalysis.CSharp.Symbols;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.CodeAnalysis.PooledObjects;
 using Roslyn.Utilities;
 
 namespace Microsoft.CodeAnalysis.CSharp
@@ -262,7 +263,13 @@ namespace Microsoft.CodeAnalysis.CSharp
                 var foundAwait = result.Any(pending => pending.Branch?.Kind == BoundKind.AwaitExpression);
                 if (!foundAwait)
                 {
-                    Diagnostics.Add(ErrorCode.WRN_AsyncLacksAwaits, currentMethodOrLambda.Locations[0]);
+                    // If we're on a LambdaSymbol, then use its 'DiagnosticLocation'.  That will be
+                    // much better than using its 'Location' (which is the entire span of the lambda).
+                    var diagnosticLocation = currentMethodOrLambda is LambdaSymbol lambda
+                        ? lambda.DiagnosticLocation
+                        : currentMethodOrLambda.Locations[0];
+
+                    Diagnostics.Add(ErrorCode.WRN_AsyncLacksAwaits, diagnosticLocation);
                 }
             }
 
@@ -271,7 +278,14 @@ namespace Microsoft.CodeAnalysis.CSharp
 
         protected virtual void ReportUnassignedOutParameter(ParameterSymbol parameter, SyntaxNode node, Location location)
         {
-            if (!_requireOutParamsAssigned && topLevelMethod == currentMethodOrLambda) return;
+            if (!_requireOutParamsAssigned && topLevelMethod == currentMethodOrLambda)
+            {
+                return;
+            }
+
+            // If node and location are null "new SourceLocation(node);" will throw a NullReferenceException
+            Debug.Assert(node != null || location != null);
+
             if (Diagnostics != null && this.State.Reachable)
             {
                 if (location == null)
@@ -608,11 +622,14 @@ namespace Microsoft.CodeAnalysis.CSharp
                         }
                         return WriteConsideredUse(null, boundConversion.Operand);
                     }
-                case BoundKind.DefaultOperator:
+                case BoundKind.DefaultExpression:
                     return false;
                 case BoundKind.ObjectCreationExpression:
                     var init = (BoundObjectCreationExpression)value;
                     return !init.Constructor.IsImplicitlyDeclared || init.InitializerExpressionOpt != null;
+                case BoundKind.TupleLiteral:
+                case BoundKind.ConvertedTupleLiteral:
+                    return false;
                 default:
                     return true;
             }
@@ -888,56 +905,14 @@ namespace Microsoft.CodeAnalysis.CSharp
                     if (slot >= this.State.Assigned.Capacity) Normalize(ref this.State);
                     if (slot > 0 && !this.State.IsAssigned(slot))
                     {
-                        ReportUnassigned(symbol, node);
+                        ReportUnassignedIfNotCapturedInLocalFunction(symbol, node, slot);
                     }
                 }
             }
         }
 
-        /// <summary>
-        /// Check that the given variable is definitely assigned.  If not, produce an error.
-        /// </summary>
-        /// <remarks>
-        /// Specifying the slot manually may be necessary if the symbol is a field,
-        /// in which case <see cref="VariableSlot(Symbol, int)"/> will not know
-        /// which containing slot to look for.
-        /// </remarks>
-        private void CheckAssigned(Symbol symbol, SyntaxNode node, int slot)
+        private void ReportUnassignedIfNotCapturedInLocalFunction(Symbol symbol, SyntaxNode node, int slot, bool skipIfUseBeforeDeclaration = true)
         {
-            Debug.Assert(!IsConditionalState);
-            if ((object)symbol != null)
-            {
-                NoteRead(symbol);
-
-                if (this.State.Reachable)
-                {
-                    if (slot >= this.State.Assigned.Capacity)
-                    {
-                        Normalize(ref this.State);
-                    }
-
-                    if (slot > 0 && !this.State.IsAssigned(slot))
-                    {
-                        ReportUnassigned(symbol, node, slot);
-                    }
-                }
-            }
-        }
-
-        private void ReportUnassigned(Symbol symbol, SyntaxNode node, int? slotOpt)
-        {
-            int slot = slotOpt ?? VariableSlot(symbol);
-            if (slot <= 0) return;
-
-            // If this is a constant, constants are always definitely assigned
-            // so we should skip reporting. This can happen in a local function
-            // where we use a constant before we actually visit its definition
-            // (since local function declarations are visited before other statements).
-            if (symbol.Kind == SymbolKind.Local && ((LocalSymbol)symbol).IsConst)
-            {
-                return;
-            }
-
             // If the symbol is captured by the nearest
             // local function, record the read and skip the diagnostic
             if (IsCapturedInLocalFunction(slot))
@@ -946,8 +921,44 @@ namespace Microsoft.CodeAnalysis.CSharp
                 return;
             }
 
-            if (slot >= _alreadyReported.Capacity) _alreadyReported.EnsureCapacity(nextVariableSlot);
-            if (symbol.Kind == SymbolKind.Local && (symbol.Locations.Length == 0 || node.Span.End < symbol.Locations[0].SourceSpan.Start))
+            ReportUnassigned(symbol, node, slot, skipIfUseBeforeDeclaration);
+        }
+
+        /// <summary>
+        /// Report a given variable as not definitely assigned.  Once a variable has been so
+        /// reported, we suppress further reports of that variable.
+        /// </summary>
+        protected virtual void ReportUnassigned(Symbol symbol, SyntaxNode node, int slot, bool skipIfUseBeforeDeclaration)
+        {
+            if (slot <= 0)
+            {
+                return;
+            }
+
+            // If this is a constant, constants are always definitely assigned
+            // so we should skip reporting. This can happen in a local function
+            // where we use a constant before we actually visit its definition
+            // (since local function declarations are visited before other statements)
+            // e.g.
+            // void M()
+            // {
+            //   L();
+            //   const int x = 0;
+            //   int L() => x;
+            // }
+            if (symbol is LocalSymbol local && local.IsConst)
+            {
+                return;
+            }
+
+            if (slot >= _alreadyReported.Capacity)
+            {
+                _alreadyReported.EnsureCapacity(nextVariableSlot);
+            }
+
+            if (skipIfUseBeforeDeclaration &&
+                symbol.Kind == SymbolKind.Local &&
+                (symbol.Locations.Length == 0 || node.Span.End < symbol.Locations[0].SourceSpan.Start))
             {
                 // We've already reported the use of a local before its declaration.  No need to emit
                 // another diagnostic for the same issue.
@@ -997,20 +1008,11 @@ namespace Microsoft.CodeAnalysis.CSharp
             _alreadyReported[slot] = true;
         }
 
-        /// <summary>
-        /// Report a given variable as not definitely assigned.  Once a variable has been so
-        /// reported, we suppress further reports of that variable.
-        /// </summary>
-        protected virtual void ReportUnassigned(Symbol symbol,
-                                                SyntaxNode node) =>
-            ReportUnassigned(symbol, node, slotOpt: null);
-
         protected virtual void CheckAssigned(BoundExpression expr, FieldSymbol fieldSymbol, SyntaxNode node)
         {
-            int unassignedSlot;
-            if (this.State.Reachable && !IsAssigned(expr, out unassignedSlot))
+            if (this.State.Reachable && !IsAssigned(expr, out int unassignedSlot))
             {
-                ReportUnassigned(fieldSymbol, unassignedSlot, node);
+                ReportUnassignedIfNotCapturedInLocalFunction(fieldSymbol, node, unassignedSlot);
             }
 
             NoteRead(expr);
@@ -1107,13 +1109,6 @@ namespace Microsoft.CodeAnalysis.CSharp
             Debug.Assert(unassignedSlot > 0);
             return this.State.IsAssigned(unassignedSlot);
         }
-
-        /// <summary>
-        /// Report a given variable as not definitely assigned.  Once a variable has been so
-        /// reported, we suppress further reports of that variable.
-        /// </summary>
-        protected virtual void ReportUnassigned(FieldSymbol fieldSymbol, int unassignedSlot, SyntaxNode node) =>
-            ReportUnassigned(fieldSymbol, node, slotOpt: unassignedSlot);
 
         protected Symbol GetNonFieldSymbol(int slot)
         {
@@ -1240,16 +1235,6 @@ namespace Microsoft.CodeAnalysis.CSharp
                     AssignImpl(((BoundRangeVariable)node).Value, value, refKind, written, read);
                     break;
 
-                case BoundKind.ForEachStatement:
-                    {
-                        var iterationVariable = ((BoundForEachStatement)node).IterationVariableOpt;
-                        Debug.Assert((object)iterationVariable != null);
-                        int slot = GetOrCreateSlot(iterationVariable);
-                        if (slot > 0) SetSlotState(slot, written);
-                        if (written) NoteWrite(iterationVariable, value, read);
-                        break;
-                    }
-
                 case BoundKind.BadExpression:
                     {
                         // Sometimes a bad node is not so bad that we cannot analyze it at all.
@@ -1260,6 +1245,10 @@ namespace Microsoft.CodeAnalysis.CSharp
                         }
                         break;
                     }
+
+                case BoundKind.TupleLiteral:
+                    ((BoundTupleExpression)node).VisitAllElements((x, self) => self.Assign(x, value: null, refKind: refKind), this);
+                    break;
 
                 default:
                     // Other kinds of left-hand-sides either represent things not tracked (e.g. array elements)
@@ -1578,41 +1567,37 @@ namespace Microsoft.CodeAnalysis.CSharp
             base.VisitPatternSwitchSection(node, switchExpression, isLastSection);
         }
 
-        private void CreateSlots(BoundPattern pattern)
-        {
-            if (pattern.Kind == BoundKind.DeclarationPattern)
-            {
-                var local = ((BoundDeclarationPattern)pattern).Variable as LocalSymbol;
-                if ((object)local != null)
-                {
-                    int slot = GetOrCreateSlot(local);
-                }
-            }
-        }
-
         public override BoundNode VisitForStatement(BoundForStatement node)
         {
             DeclareVariables(node.OuterLocals);
+            DeclareVariables(node.InnerLocals);
             var result = base.VisitForStatement(node);
+            ReportUnusedVariables(node.InnerLocals);
             ReportUnusedVariables(node.OuterLocals);
-            return result;
-        }
-
-        public override BoundNode VisitDoStatement(BoundDoStatement node)
-        {
-            var result = base.VisitDoStatement(node);
-            return result;
-        }
-
-        public override BoundNode VisitWhileStatement(BoundWhileStatement node)
-        {
-            var result = base.VisitWhileStatement(node);
             return result;
         }
 
         public override BoundNode VisitForEachStatement(BoundForEachStatement node)
         {
+            // NOTE: iteration variables are not declared or assigned
+            //       before the collection expression is evaluated 
             var result = base.VisitForEachStatement(node);
+            return result;
+        }
+
+        public override BoundNode VisitDoStatement(BoundDoStatement node)
+        {
+            DeclareVariables(node.Locals);
+            var result = base.VisitDoStatement(node);
+            ReportUnusedVariables(node.Locals);
+            return result;
+        }
+
+        public override BoundNode VisitWhileStatement(BoundWhileStatement node)
+        {
+            DeclareVariables(node.Locals);
+            var result = base.VisitWhileStatement(node);
+            ReportUnusedVariables(node.Locals);
             return result;
         }
 
@@ -1717,7 +1702,7 @@ namespace Microsoft.CodeAnalysis.CSharp
             {
                 if (!string.IsNullOrEmpty(symbol.Name)) // avoid diagnostics for parser-inserted names
                 {
-                    Diagnostics.Add(ErrorCode.WRN_UnreferencedVar, symbol.Locations[0], symbol.Name);
+                    Diagnostics.Add(ErrorCode.WRN_UnreferencedLocalFunction, symbol.Locations[0], symbol.Name);
                 }
             }
         }
@@ -1877,12 +1862,7 @@ namespace Microsoft.CodeAnalysis.CSharp
         public override BoundNode VisitDeconstructionAssignmentOperator(BoundDeconstructionAssignmentOperator node)
         {
             base.VisitDeconstructionAssignmentOperator(node);
-
-            foreach (BoundExpression variable in node.LeftVariables)
-            {
-                Assign(variable, value: null, refKind: RefKind.None);
-            }
-
+            Assign(node.Left, node.Right);
             return null;
         }
 
@@ -1900,39 +1880,49 @@ namespace Microsoft.CodeAnalysis.CSharp
             return null;
         }
 
-        public override BoundNode VisitAddressOfOperator(BoundAddressOfOperator node)
+        public override BoundNode VisitFixedLocalCollectionInitializer(BoundFixedLocalCollectionInitializer node)
         {
-            BoundExpression operand = node.Operand;
-            bool shouldReadOperand = false;
+            var initializer = node.Expression;
+
+            if (initializer.Kind == BoundKind.AddressOfOperator)
+            {
+                initializer = ((BoundAddressOfOperator)initializer).Operand;
+            }
 
             // If the node is a fixed statement address-of operator (e.g. fixed(int *p = &...)),
             // then we don't need to consider it for membership in unsafeAddressTakenVariables,
             // because it is either not a local/parameter/range variable (if the variable is
             // non-moveable) or it is and it has a RefKind other than None, in which case it can't
             // be referred to in a lambda (i.e. can't be captured).
-            if (!node.IsFixedStatementAddressOf)
-            {
-                Symbol variable = UseNonFieldSymbolUnsafely(operand);
-                if ((object)variable != null)
-                {
-                    // The goal here is to treat address-of as a read in cases where
-                    // we (a) care about a read happening (e.g. for DataFlowsIn) and
-                    // (b) have information indicating that this will not result in
-                    // a read to an unassigned variable (i.e. the operand is definitely
-                    // assigned).
-                    if (_unassignedVariableAddressOfSyntaxes?.Contains(node.Syntax as PrefixUnaryExpressionSyntax) == false)
-                    {
-                        shouldReadOperand = true;
-                    }
+            VisitAddressOfOperand(initializer, shouldReadOperand: false);
+            return null;
+        }
 
-                    if (!_unsafeAddressTakenVariables.ContainsKey(variable))
-                    {
-                        _unsafeAddressTakenVariables.Add(variable, node.Syntax.Location);
-                    }
+        public override BoundNode VisitAddressOfOperator(BoundAddressOfOperator node)
+        {
+            BoundExpression operand = node.Operand;
+            bool shouldReadOperand = false;
+
+            Symbol variable = UseNonFieldSymbolUnsafely(operand);
+            if ((object)variable != null)
+            {
+                // The goal here is to treat address-of as a read in cases where
+                // we (a) care about a read happening (e.g. for DataFlowsIn) and
+                // (b) have information indicating that this will not result in
+                // a read to an unassigned variable (i.e. the operand is definitely
+                // assigned).
+                if (_unassignedVariableAddressOfSyntaxes?.Contains(node.Syntax as PrefixUnaryExpressionSyntax) == false)
+                {
+                    shouldReadOperand = true;
+                }
+
+                if (!_unsafeAddressTakenVariables.ContainsKey(variable))
+                {
+                    _unsafeAddressTakenVariables.Add(variable, node.Syntax.Location);
                 }
             }
 
-            VisitAddressOfOperator(node, shouldReadOperand);
+            VisitAddressOfOperand(node.Operand, shouldReadOperand);
 
             return null;
         }
@@ -2176,7 +2166,7 @@ namespace Microsoft.CodeAnalysis.CSharp
                         int unassignedSlot;
                         if (this.State.Reachable && !IsAssigned(node, out unassignedSlot))
                         {
-                            ReportUnassigned(backingField, unassignedSlot, node.Syntax);
+                            ReportUnassignedIfNotCapturedInLocalFunction(backingField, node.Syntax, unassignedSlot);
                         }
                     }
                 }
@@ -2202,14 +2192,16 @@ namespace Microsoft.CodeAnalysis.CSharp
             return result;
         }
 
-        public override void VisitForEachIterationVariable(BoundForEachStatement node)
+        public override void VisitForEachIterationVariables(BoundForEachStatement node)
         {
-            var local = node.IterationVariableOpt;
-            if ((object)local != null)
+            // declare and assign all iteration variables
+            foreach (var iterationVariable in node.IterationVariables)
             {
-                GetOrCreateSlot(local);
-                Assign(node, value: null);
-                // TODO: node needed? NoteRead(local); // Never warn about unused foreach variables.
+                Debug.Assert((object)iterationVariable != null);
+                int slot = GetOrCreateSlot(iterationVariable);
+                if (slot > 0) SetSlotAssigned(slot);
+                // NOTE: do not report unused iteration variables. They are always considered used.
+                NoteWrite(iterationVariable, null, read: true);
             }
         }
 

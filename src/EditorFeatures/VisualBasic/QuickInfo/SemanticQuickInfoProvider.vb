@@ -1,4 +1,4 @@
-' Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+﻿' Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
 Imports System.ComponentModel.Composition
 Imports System.Threading
@@ -120,8 +120,13 @@ Namespace Microsoft.CodeAnalysis.Editor.VisualBasic.QuickInfo
                         Return Nothing
                     End If
 
-                    Return symbol.TypeSwitch(Function(local As ILocalSymbol) local.Type,
-                                             Function(field As IFieldSymbol) field.Type)
+                    If TypeOf symbol Is ILocalSymbol Then
+                        Return DirectCast(symbol, ILocalSymbol).Type
+                    ElseIf TypeOf symbol Is IFieldSymbol Then
+                        Return DirectCast(symbol, IFieldSymbol).Type
+                    Else
+                        Return Nothing
+                    End If
                 End Function).WhereNotNull().Distinct().ToList()
 
             If types.Count = 0 Then

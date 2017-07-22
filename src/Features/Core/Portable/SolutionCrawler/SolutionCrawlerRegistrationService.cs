@@ -1,4 +1,4 @@
-// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+﻿// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
 using System;
 using System.Collections.Generic;
@@ -93,7 +93,7 @@ namespace Microsoft.CodeAnalysis.SolutionCrawler
                 var lazyProvider = new Lazy<IIncrementalAnalyzerProvider, IncrementalAnalyzerProviderMetadata>(() => provider, metadata);
 
                 // update existing map for future solution crawler registration - no need for interlock but this makes add or update easier
-                ImmutableInterlocked.AddOrUpdate(ref _analyzerProviders, metadata.Name, (n) => ImmutableArray.Create(lazyProvider), (n, v) => v.Add(lazyProvider));
+                ImmutableInterlocked.AddOrUpdate(ref _analyzerProviders, metadata.Name, n => ImmutableArray.Create(lazyProvider), (n, v) => v.Add(lazyProvider));
 
                 // assert map integrity
                 AssertAnalyzerProviders(_analyzerProviders);
@@ -104,9 +104,7 @@ namespace Microsoft.CodeAnalysis.SolutionCrawler
                 {
                     var workspace = kv.Key;
                     var coordinator = kv.Value;
-
-                    Lazy<IIncrementalAnalyzerProvider, IncrementalAnalyzerProviderMetadata> picked;
-                    if (!TryGetProvider(workspace.Kind, lazyProviders, out picked) || picked != lazyProvider)
+                    if (!TryGetProvider(workspace.Kind, lazyProviders, out var picked) || picked != lazyProvider)
                     {
                         // check whether new provider belong to current workspace
                         continue;
@@ -122,8 +120,7 @@ namespace Microsoft.CodeAnalysis.SolutionCrawler
         {
             lock (_gate)
             {
-                var coordinator = default(WorkCoordinator);
-                if (!_documentWorkCoordinatorMap.TryGetValue(workspace, out coordinator))
+                if (!_documentWorkCoordinatorMap.TryGetValue(workspace, out var coordinator))
                 {
                     // this can happen if solution crawler is already unregistered from workspace.
                     // one of those example will be VS shutting down so roslyn package is disposed but there is a pending
@@ -155,29 +152,28 @@ namespace Microsoft.CodeAnalysis.SolutionCrawler
 
         internal void WaitUntilCompletion_ForTestingPurposesOnly(Workspace workspace, ImmutableArray<IIncrementalAnalyzer> workers)
         {
-            if (_documentWorkCoordinatorMap.ContainsKey(workspace))
+            if (_documentWorkCoordinatorMap.TryGetValue(workspace, out var coordinator))
             {
-                _documentWorkCoordinatorMap[workspace].WaitUntilCompletion_ForTestingPurposesOnly(workers);
+                coordinator.WaitUntilCompletion_ForTestingPurposesOnly(workers);
             }
         }
 
         internal void WaitUntilCompletion_ForTestingPurposesOnly(Workspace workspace)
         {
-            if (_documentWorkCoordinatorMap.ContainsKey(workspace))
+            if (_documentWorkCoordinatorMap.TryGetValue(workspace, out var coordinator))
             {
-                _documentWorkCoordinatorMap[workspace].WaitUntilCompletion_ForTestingPurposesOnly();
+                coordinator.WaitUntilCompletion_ForTestingPurposesOnly();
             }
         }
 
         private IEnumerable<Lazy<IIncrementalAnalyzerProvider, IncrementalAnalyzerProviderMetadata>> GetAnalyzerProviders(Workspace workspace)
         {
-            Lazy<IIncrementalAnalyzerProvider, IncrementalAnalyzerProviderMetadata> lazyProvider;
             foreach (var kv in _analyzerProviders)
             {
                 var lazyProviders = kv.Value;
 
                 // try get provider for the specific workspace kind
-                if (TryGetProvider(workspace.Kind, lazyProviders, out lazyProvider))
+                if (TryGetProvider(workspace.Kind, lazyProviders, out var lazyProvider))
                 {
                     yield return lazyProvider;
                     continue;
@@ -275,10 +271,7 @@ namespace Microsoft.CodeAnalysis.SolutionCrawler
                 ProgressReporter = progressReporter;
             }
 
-            public Solution CurrentSolution
-            {
-                get { return Workspace.CurrentSolution; }
-            }
+            public Solution CurrentSolution => Workspace.CurrentSolution;
 
             public TService GetService<TService>() where TService : IWorkspaceService
             {

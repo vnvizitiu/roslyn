@@ -1,4 +1,4 @@
-' Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+﻿' Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
 Imports System.Threading.Tasks
 Imports Microsoft.VisualStudio.GraphModel
@@ -10,7 +10,7 @@ Namespace Microsoft.VisualStudio.LanguageServices.UnitTests.Progression
     Public Class OverriddenByGraphQueryTests
         <Fact, Trait(Traits.Feature, Traits.Features.Progression)>
         Public Async Function TestOverriddenByMethod1() As Task
-            Using testState = Await ProgressionTestState.CreateAsync(
+            Using testState = ProgressionTestState.Create(
                     <Workspace>
                         <Project Language="C#" CommonReferences="true" FilePath="Z:\Project.csproj">
                             <Document FilePath="Z:\Project.cs">
@@ -52,7 +52,7 @@ class Foo : Base, IComparable
 
         <Fact, Trait(Traits.Feature, Traits.Features.Progression)>
         Public Async Function TestOverriddenByMethod2() As Task
-            Using testState = Await ProgressionTestState.CreateAsync(
+            Using testState = ProgressionTestState.Create(
                     <Workspace>
                         <Project Language="C#" CommonReferences="true" FilePath="Z:\Project.csproj">
                             <Document FilePath="Z:\Project.cs">

@@ -1,5 +1,6 @@
 ﻿// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
+using System;
 using System.Diagnostics;
 using System.Linq;
 using System.Threading;
@@ -14,7 +15,7 @@ using Microsoft.CodeAnalysis.Text;
 namespace Microsoft.CodeAnalysis.CSharp.Diagnostics.TypeStyle
 {
     internal abstract partial class CSharpTypeStyleDiagnosticAnalyzerBase :
-        AbstractCodeStyleDiagnosticAnalyzer, IBuiltInAnalyzer
+        AbstractCodeStyleDiagnosticAnalyzer
     {
         protected CSharpTypeStyleDiagnosticAnalyzerBase(
             string diagnosticId, LocalizableString title, LocalizableString message)
@@ -22,9 +23,9 @@ namespace Microsoft.CodeAnalysis.CSharp.Diagnostics.TypeStyle
         {
         }
 
-        public DiagnosticAnalyzerCategory GetAnalyzerCategory() => DiagnosticAnalyzerCategory.SemanticSpanAnalysis;
+        public override DiagnosticAnalyzerCategory GetAnalyzerCategory() => DiagnosticAnalyzerCategory.SemanticSpanAnalysis;
 
-        public bool OpenFileOnly(Workspace workspace)
+        public override bool OpenFileOnly(Workspace workspace)
         {
             var forIntrinsicTypesOption = workspace.Options.GetOption(CSharpCodeStyleOptions.UseImplicitTypeForIntrinsicTypes).Notification;
             var whereApparentOption = workspace.Options.GetOption(CSharpCodeStyleOptions.UseImplicitTypeWhereApparent).Notification;
@@ -37,7 +38,7 @@ namespace Microsoft.CodeAnalysis.CSharp.Diagnostics.TypeStyle
 
         protected override void InitializeWorker(AnalysisContext context)
             => context.RegisterSyntaxNodeAction(
-                HandleVariableDeclaration, SyntaxKind.VariableDeclaration, SyntaxKind.ForEachStatement);
+                HandleVariableDeclaration, SyntaxKind.VariableDeclaration, SyntaxKind.ForEachStatement, SyntaxKind.DeclarationExpression);
 
         protected abstract bool IsStylePreferred(SemanticModel semanticModel, OptionSet optionSet, State state, CancellationToken cancellationToken);
         protected abstract bool TryAnalyzeVariableDeclaration(TypeSyntax typeName, SemanticModel semanticModel, OptionSet optionSet, CancellationToken cancellationToken, out TextSpan issueSpan);
@@ -54,9 +55,16 @@ namespace Microsoft.CodeAnalysis.CSharp.Diagnostics.TypeStyle
             State state = null;
             var shouldAnalyze = false;
             var declarationStatement = context.Node;
-            var optionSet = context.Options.GetOptionSet();
-            var semanticModel = context.SemanticModel;
+            var options = context.Options;
+            var syntaxTree = context.Node.SyntaxTree;
             var cancellationToken = context.CancellationToken;
+            var optionSet = options.GetDocumentOptionSetAsync(syntaxTree, cancellationToken).GetAwaiter().GetResult();
+            if (optionSet == null)
+            {
+                return;
+            }
+            
+            var semanticModel = context.SemanticModel;
 
             if (declarationStatement.IsKind(SyntaxKind.VariableDeclaration))
             {
@@ -76,8 +84,26 @@ namespace Microsoft.CodeAnalysis.CSharp.Diagnostics.TypeStyle
                 var declaration = (ForEachStatementSyntax)declarationStatement;
                 declaredType = declaration.Type;
 
-                state = State.Generate(declarationStatement, semanticModel, optionSet, isVariableDeclarationContext: false, cancellationToken: cancellationToken);
-                shouldAnalyze = IsStylePreferred(semanticModel, optionSet, state, cancellationToken);
+                shouldAnalyze = ShouldAnalyzeForEachStatement(declaration, semanticModel, cancellationToken);
+
+                if (shouldAnalyze)
+                {
+                    state = State.Generate(declarationStatement, semanticModel, optionSet, isVariableDeclarationContext: false, cancellationToken: cancellationToken);
+                    shouldAnalyze = IsStylePreferred(semanticModel, optionSet, state, cancellationToken);
+                }
+            }
+            else if (declarationStatement.IsKind(SyntaxKind.DeclarationExpression))
+            {
+                var declaration = (DeclarationExpressionSyntax) declarationStatement;
+                declaredType = declaration.Type;
+
+                shouldAnalyze = ShouldAnalyzeDeclarationExpression(declaration, semanticModel, cancellationToken);
+
+                if (shouldAnalyze)
+                {
+                    state = State.Generate(declarationStatement, semanticModel, optionSet, isVariableDeclarationContext: false, cancellationToken: cancellationToken);
+                    shouldAnalyze = IsStylePreferred(semanticModel, optionSet, state, cancellationToken);
+                }
             }
             else
             {
@@ -88,13 +114,10 @@ namespace Microsoft.CodeAnalysis.CSharp.Diagnostics.TypeStyle
             if (shouldAnalyze)
             {
                 Debug.Assert(state != null, "analyzing a declaration and state is null.");
-
-                TextSpan diagnosticSpan;
-
-                if (TryAnalyzeVariableDeclaration(declaredType, semanticModel, optionSet, cancellationToken, out diagnosticSpan))
+                if (TryAnalyzeVariableDeclaration(declaredType, semanticModel, optionSet, cancellationToken, out var diagnosticSpan))
                 {
                     // The severity preference is not Hidden, as indicated by shouldAnalyze.
-                    var descriptor = CreateDescriptorWithSeverity(state.GetDiagnosticSeverityPreference());
+                    var descriptor = GetDescriptorWithSeverity(state.GetDiagnosticSeverityPreference());
                     context.ReportDiagnostic(CreateDiagnostic(descriptor, declarationStatement, diagnosticSpan));
                 }
             }
@@ -103,7 +126,7 @@ namespace Microsoft.CodeAnalysis.CSharp.Diagnostics.TypeStyle
         private Diagnostic CreateDiagnostic(DiagnosticDescriptor descriptor, SyntaxNode declaration, TextSpan diagnosticSpan) =>
             Diagnostic.Create(descriptor, declaration.SyntaxTree.GetLocation(diagnosticSpan));
 
-        private bool ShouldAnalyzeVariableDeclaration(VariableDeclarationSyntax variableDeclaration, SemanticModel semanticModel, CancellationToken cancellationToken)
+        protected virtual bool ShouldAnalyzeVariableDeclaration(VariableDeclarationSyntax variableDeclaration, SemanticModel semanticModel, CancellationToken cancellationToken)
         {
             // implict type is applicable only for local variables and
             // such declarations cannot have multiple declarators and
@@ -117,5 +140,11 @@ namespace Microsoft.CodeAnalysis.CSharp.Diagnostics.TypeStyle
                    variableDeclaration.Variables.Count == 1 &&
                    variableDeclaration.Variables.Single().Initializer.IsKind(SyntaxKind.EqualsValueClause);
         }
+
+        protected virtual bool ShouldAnalyzeForEachStatement(ForEachStatementSyntax forEachStatement, SemanticModel semanticModel, CancellationToken cancellationToken)
+            => true;
+
+        protected virtual bool ShouldAnalyzeDeclarationExpression(DeclarationExpressionSyntax declaration, SemanticModel semanticModel, CancellationToken cancellationToken)
+            => true;
     }
 }

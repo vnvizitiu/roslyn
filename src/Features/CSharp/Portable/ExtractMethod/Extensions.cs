@@ -1,4 +1,4 @@
-// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+﻿// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
 using System;
 using System.Collections.Generic;
@@ -57,12 +57,15 @@ namespace Microsoft.CodeAnalysis.CSharp.ExtractMethod
 
         public static BlockSyntax GetBlockBody(this SyntaxNode node)
         {
-            return node.TypeSwitch(
-                (BaseMethodDeclarationSyntax m) => m.Body,
-                (AccessorDeclarationSyntax a) => a.Body,
-                (SimpleLambdaExpressionSyntax s) => s.Body as BlockSyntax,
-                (ParenthesizedLambdaExpressionSyntax p) => p.Body as BlockSyntax,
-                (AnonymousMethodExpressionSyntax a) => a.Block);
+            switch (node)
+            {
+                case BaseMethodDeclarationSyntax m: return m.Body;
+                case AccessorDeclarationSyntax a: return a.Body;
+                case SimpleLambdaExpressionSyntax s: return s.Body as BlockSyntax;
+                case ParenthesizedLambdaExpressionSyntax p: return p.Body as BlockSyntax;
+                case AnonymousMethodExpressionSyntax a: return a.Block;
+                default: return null;
+            }
         }
 
         public static bool UnderValidContext(this SyntaxNode node)

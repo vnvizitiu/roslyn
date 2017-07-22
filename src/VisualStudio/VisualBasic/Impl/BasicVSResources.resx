@@ -13,7 +13,7 @@
     Example:
     
     ... ado.net/XML headers & schema ...
-    <resheader name="resmimetype">text/microsoft-resx</resheader>
+    <resheader name="resmimetype">text/microsoft-resx</resheader
     <resheader name="version">2.0</resheader>
     <resheader name="reader">System.Resources.ResXResourceReader, System.Windows.Forms, ...</resheader>
     <resheader name="writer">System.Resources.ResXResourceWriter, System.Windows.Forms, ...</resheader>
@@ -131,9 +131,6 @@
   </data>
   <data name="Automatic_insertion_of_Interface_and_MustOverride_members" xml:space="preserve">
     <value>Automatic _insertion of Interface and MustOverride members</value>
-  </data>
-  <data name="Enable_full_solution_analysis" xml:space="preserve">
-    <value>Enable full solution _analysis</value>
   </data>
   <data name="Show_procedure_line_separators" xml:space="preserve">
     <value>_Show procedure line separators</value>
@@ -269,5 +266,11 @@
   </data>
   <data name="nothing_checking_colon" xml:space="preserve">
     <value>'nothing' checking:</value>
+  </data>
+  <data name="Fade_out_unused_imports" xml:space="preserve">
+    <value>Fade out unused imports</value>
+  </data>
+  <data name="Report_invalid_placeholders_in_string_dot_format_calls" xml:space="preserve">
+    <value>Report invalid placeholders in 'String.Format' calls</value>
   </data>
 </root>

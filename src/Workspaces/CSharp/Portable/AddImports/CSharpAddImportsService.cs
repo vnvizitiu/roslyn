@@ -1,5 +1,6 @@
 ﻿// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
+using System.Collections.Immutable;
 using System.Composition;
 using Microsoft.CodeAnalysis.AddImports;
 using Microsoft.CodeAnalysis.CSharp.Extensions;
@@ -12,6 +13,10 @@ namespace Microsoft.CodeAnalysis.CSharp.AddImports
     internal class CSharpAddImportsService : AbstractAddImportsService<
         CompilationUnitSyntax, NamespaceDeclarationSyntax, UsingDirectiveSyntax, ExternAliasDirectiveSyntax>
     {
+        // C# doesn't have global imports.
+        protected override ImmutableArray<SyntaxNode> GetGlobalImports(Compilation compilation)
+            => ImmutableArray<SyntaxNode>.Empty;
+
         protected override SyntaxNode GetAlias(UsingDirectiveSyntax usingOrAlias)
             => usingOrAlias.Alias;
 
@@ -40,7 +45,7 @@ namespace Microsoft.CodeAnalysis.CSharp.AddImports
             {
                 case CompilationUnitSyntax c: return c.Usings;
                 case NamespaceDeclarationSyntax n: return n.Usings;
-                default: return default(SyntaxList<UsingDirectiveSyntax>);
+                default: return default;
             }
         }
 
@@ -50,7 +55,7 @@ namespace Microsoft.CodeAnalysis.CSharp.AddImports
             {
                 case CompilationUnitSyntax c: return c.Externs;
                 case NamespaceDeclarationSyntax n: return n.Externs;
-                default: return default(SyntaxList<ExternAliasDirectiveSyntax>);
+                default: return default;
             }
         }
 

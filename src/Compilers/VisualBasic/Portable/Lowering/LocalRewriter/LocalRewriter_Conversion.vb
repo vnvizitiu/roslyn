@@ -3,6 +3,7 @@
 Imports System.Collections.Immutable
 Imports System.Diagnostics
 Imports System.Runtime.InteropServices
+Imports Microsoft.CodeAnalysis.PooledObjects
 Imports Microsoft.CodeAnalysis.Text
 Imports Microsoft.CodeAnalysis.VisualBasic.Symbols
 Imports Microsoft.CodeAnalysis.VisualBasic.Syntax
@@ -148,7 +149,7 @@ Namespace Microsoft.CodeAnalysis.VisualBasic
                 tupleTypeSymbol = TupleTypeSymbol.Create(DirectCast(srcType, NamedTypeSymbol))
             End If
 
-            Dim srcElementFields = tupleTypeSymbol.TupleDefaultElementFields
+            Dim srcElementFields = tupleTypeSymbol.TupleElements
 
             Dim fieldAccessorsBuilder = ArrayBuilder(Of BoundExpression).GetInstance(numElements)
             Dim assignmentToTemp As BoundExpression = Nothing

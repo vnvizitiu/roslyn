@@ -1,4 +1,4 @@
-// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+﻿// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
 using System;
 using System.Collections.Generic;
@@ -206,31 +206,13 @@ namespace Microsoft.VisualStudio.LanguageServices.Implementation.TaskList
                     var diagnosticService = _diagnosticService as DiagnosticAnalyzerService;
                     if (diagnosticService != null)
                     {
-                        await CleanupAllLiveErrorsIfNeededAsync(diagnosticService, inprogressState.Solution, inprogressState).ConfigureAwait(false);
+                        await CleanupAllLiveErrors(diagnosticService, inprogressState.GetProjectsWithoutErrors(inprogressState.Solution)).ConfigureAwait(false);
                         await SyncBuildErrorsAndReportAsync(diagnosticService, inprogressState.Solution, inprogressState.GetLiveDiagnosticsPerProject(liveDiagnosticChecker)).ConfigureAwait(false);
                     }
 
                     inprogressState.Done();
                 }
             }).CompletesAsyncOperation(asyncToken);
-        }
-
-        private async System.Threading.Tasks.Task CleanupAllLiveErrorsIfNeededAsync(DiagnosticAnalyzerService diagnosticService, Solution solution, InprogressState state)
-        {
-            if (_workspace.Options.GetOption(InternalDiagnosticsOptions.BuildErrorIsTheGod))
-            {
-                await CleanupAllLiveErrors(diagnosticService, solution.ProjectIds).ConfigureAwait(false);
-                return;
-            }
-
-            if (_workspace.Options.GetOption(InternalDiagnosticsOptions.ClearLiveErrorsForProjectBuilt))
-            {
-                await CleanupAllLiveErrors(diagnosticService, state.GetProjectsBuilt(solution)).ConfigureAwait(false);
-                return;
-            }
-
-            await CleanupAllLiveErrors(diagnosticService, state.GetProjectsWithoutErrors(solution)).ConfigureAwait(false);
-            return;
         }
 
         private System.Threading.Tasks.Task CleanupAllLiveErrors(DiagnosticAnalyzerService diagnosticService, IEnumerable<ProjectId> projects)
@@ -404,7 +386,7 @@ namespace Microsoft.VisualStudio.LanguageServices.Implementation.TaskList
         public bool SupportGetDiagnostics { get { return false; } }
 
         public ImmutableArray<DiagnosticData> GetDiagnostics(
-            Workspace workspace, ProjectId projectId, DocumentId documentId, object id, bool includeSuppressedDiagnostics = false, CancellationToken cancellationToken = default(CancellationToken))
+            Workspace workspace, ProjectId projectId, DocumentId documentId, object id, bool includeSuppressedDiagnostics = false, CancellationToken cancellationToken = default)
         {
             return ImmutableArray<DiagnosticData>.Empty;
         }
@@ -438,8 +420,7 @@ namespace Microsoft.VisualStudio.LanguageServices.Implementation.TaskList
 
             public bool SupportedDiagnosticId(ProjectId projectId, string id)
             {
-                HashSet<string> ids;
-                if (_diagnosticIdMap.TryGetValue(projectId, out ids))
+                if (_diagnosticIdMap.TryGetValue(projectId, out var ids))
                 {
                     return ids.Contains(id);
                 }

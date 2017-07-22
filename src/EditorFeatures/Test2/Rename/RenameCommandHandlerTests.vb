@@ -1,4 +1,4 @@
-' Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+﻿' Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
 Imports System.Threading.Tasks
 Imports Microsoft.CodeAnalysis
@@ -48,11 +48,11 @@ Namespace Microsoft.CodeAnalysis.Editor.UnitTests.Rename
         <WpfFact>
         <Trait(Traits.Feature, Traits.Features.Rename)>
         <Trait(Traits.Feature, Traits.Features.Interactive)>
-        Public Async Function RenameCommandDisabledInSubmission() As Task
+        Public Sub RenameCommandDisabledInSubmission()
             Dim exportProvider = MinimalTestExportProvider.CreateExportProvider(
                 TestExportProvider.EntireAssemblyCatalogWithCSharpAndVisualBasic.WithParts(GetType(InteractiveDocumentSupportsFeatureService)))
 
-            Using workspace = Await TestWorkspace.CreateAsync(
+            Using workspace = TestWorkspace.Create(
                 <Workspace>
                     <Submission Language="C#" CommonReferences="true">  
                         object $$foo;  
@@ -78,7 +78,7 @@ Namespace Microsoft.CodeAnalysis.Editor.UnitTests.Rename
                 Assert.True(delegatedToNext)
                 Assert.False(state.IsAvailable)
             End Using
-        End Function
+        End Sub
 
         <WpfFact>
         <Trait(Traits.Feature, Traits.Features.Rename)>

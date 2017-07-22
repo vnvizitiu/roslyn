@@ -1,6 +1,7 @@
 ﻿// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
 using System.Collections.Immutable;
+using Microsoft.CodeAnalysis.PooledObjects;
 using Roslyn.Utilities;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -68,7 +69,6 @@ namespace Microsoft.CodeAnalysis.Emit.NoPia
             protected abstract bool IsSealed { get; }
             protected abstract TypeLayout? GetTypeLayoutIfStruct();
             protected abstract System.Runtime.InteropServices.CharSet StringFormat { get; }
-            protected abstract TAttributeData CreateCompilerGeneratedAttribute();
             protected abstract TAttributeData CreateTypeIdentifierAttribute(bool hasGuid, TSyntaxNode syntaxNodeOpt, DiagnosticBag diagnostics);
             protected abstract void EmbedDefaultMembers(string defaultMember, TSyntaxNode syntaxNodeOpt, DiagnosticBag diagnostics);
             protected abstract IEnumerable<TAttributeData> GetCustomAttributesToEmit(TModuleCompilationState compilationState);
@@ -85,7 +85,7 @@ namespace Microsoft.CodeAnalysis.Emit.NoPia
 
                 // Put the CompilerGenerated attribute on the NoPIA types we define so that 
                 // static analysis tools (e.g. fxcop) know that they can be skipped
-                builder.AddOptional(CreateCompilerGeneratedAttribute());
+                builder.AddOptional(TypeManager.CreateCompilerGeneratedAttribute());
 
                 // Copy some of the attributes.
 
@@ -233,31 +233,28 @@ namespace Microsoft.CodeAnalysis.Emit.NoPia
                 return GetBaseClass((TPEModuleBuilder)context.Module, (TSyntaxNode)context.SyntaxNodeOpt, context.Diagnostics);
             }
 
-            IEnumerable<Cci.IEventDefinition> Cci.ITypeDefinition.Events
+            IEnumerable<Cci.IEventDefinition> Cci.ITypeDefinition.GetEvents(EmitContext context)
             {
-                get
+                if (_lazyEvents.IsDefault)
                 {
-                    if (_lazyEvents.IsDefault)
+                    Debug.Assert(TypeManager.IsFrozen);
+
+                    var builder = ArrayBuilder<Cci.IEventDefinition>.GetInstance();
+
+                    foreach (var e in GetEventsToEmit())
                     {
-                        Debug.Assert(TypeManager.IsFrozen);
+                        TEmbeddedEvent embedded;
 
-                        var builder = ArrayBuilder<Cci.IEventDefinition>.GetInstance();
-
-                        foreach (var e in GetEventsToEmit())
+                        if (TypeManager.EmbeddedEventsMap.TryGetValue(e, out embedded))
                         {
-                            TEmbeddedEvent embedded;
-
-                            if (TypeManager.EmbeddedEventsMap.TryGetValue(e, out embedded))
-                            {
-                                builder.Add(embedded);
-                            }
+                            builder.Add(embedded);
                         }
-
-                        ImmutableInterlocked.InterlockedInitialize(ref _lazyEvents, builder.ToImmutableAndFree());
                     }
 
-                    return _lazyEvents;
+                    ImmutableInterlocked.InterlockedInitialize(ref _lazyEvents, builder.ToImmutableAndFree());
                 }
+
+                return _lazyEvents;
             }
 
             IEnumerable<Cci.MethodImplementation> Cci.ITypeDefinition.GetExplicitImplementationOverrides(EmitContext context)
@@ -567,9 +564,12 @@ namespace Microsoft.CodeAnalysis.Emit.NoPia
                 return this;
             }
 
-            Cci.PrimitiveTypeCode Cci.ITypeReference.TypeCode(EmitContext context)
+            Cci.PrimitiveTypeCode Cci.ITypeReference.TypeCode
             {
-                return Cci.PrimitiveTypeCode.NotPrimitive;
+                get
+                {
+                    return Cci.PrimitiveTypeCode.NotPrimitive;
+                }
             }
 
             TypeDefinitionHandle Cci.ITypeReference.TypeDef

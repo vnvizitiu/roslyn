@@ -4,6 +4,7 @@ Imports System.Collections.Immutable
 Imports System.Reflection
 Imports System.Runtime.InteropServices
 Imports System.Threading
+Imports Microsoft.CodeAnalysis.PooledObjects
 
 Friend Interface IMockSymbol
     Sub SetContainer(container As Symbol)
@@ -585,7 +586,13 @@ Friend Class MockMethodSymbol
 
     Public Overrides ReadOnly Property ReturnTypeCustomModifiers As ImmutableArray(Of CustomModifier)
         Get
-            Return ImmutableArray.Create(Of CustomModifier)()
+            Return ImmutableArray(Of CustomModifier).Empty
+        End Get
+    End Property
+
+    Public Overrides ReadOnly Property RefCustomModifiers As ImmutableArray(Of CustomModifier)
+        Get
+            Return ImmutableArray(Of CustomModifier).Empty
         End Get
     End Property
 

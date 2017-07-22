@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Diagnostics;
 using Microsoft.CodeAnalysis.CodeGen;
+using Microsoft.CodeAnalysis.PooledObjects;
 using Roslyn.Utilities;
 
 namespace Microsoft.CodeAnalysis.CSharp.Symbols
@@ -138,6 +139,8 @@ namespace Microsoft.CodeAnalysis.CSharp.Symbols
             return node.Update(newLocals, newLocalFunctions, newStatements);
         }
 
+        public override abstract BoundNode VisitScope(BoundScope node);
+
         public override BoundNode VisitSequence(BoundSequence node)
         {
             var newLocals = RewriteLocals(node.Locals);
@@ -160,10 +163,27 @@ namespace Microsoft.CodeAnalysis.CSharp.Symbols
         {
             var newOuterLocals = RewriteLocals(node.OuterLocals);
             BoundStatement initializer = (BoundStatement)this.Visit(node.Initializer);
+            var newInnerLocals = RewriteLocals(node.InnerLocals);
             BoundExpression condition = (BoundExpression)this.Visit(node.Condition);
             BoundStatement increment = (BoundStatement)this.Visit(node.Increment);
             BoundStatement body = (BoundStatement)this.Visit(node.Body);
-            return node.Update(newOuterLocals, initializer, condition, increment, body, node.BreakLabel, node.ContinueLabel);
+            return node.Update(newOuterLocals, initializer, newInnerLocals, condition, increment, body, node.BreakLabel, node.ContinueLabel);
+        }
+
+        public override BoundNode VisitDoStatement(BoundDoStatement node)
+        {
+            var newLocals = RewriteLocals(node.Locals);
+            BoundExpression condition = (BoundExpression)this.Visit(node.Condition);
+            BoundStatement body = (BoundStatement)this.Visit(node.Body);
+            return node.Update(newLocals, condition, body, node.BreakLabel, node.ContinueLabel);
+        }
+
+        public override BoundNode VisitWhileStatement(BoundWhileStatement node)
+        {
+            var newLocals = RewriteLocals(node.Locals);
+            BoundExpression condition = (BoundExpression)this.Visit(node.Condition);
+            BoundStatement body = (BoundStatement)this.Visit(node.Body);
+            return node.Update(newLocals, condition, body, node.BreakLabel, node.ContinueLabel);
         }
 
         public override BoundNode VisitUsingStatement(BoundUsingStatement node)
@@ -182,8 +202,9 @@ namespace Microsoft.CodeAnalysis.CSharp.Symbols
             {
                 case ConversionKind.ExplicitUserDefined:
                 case ConversionKind.ImplicitUserDefined:
-                case ConversionKind.MethodGroup:
                     return new Conversion(conversion.Kind, VisitMethodSymbol(conversion.Method), conversion.IsExtensionMethod);
+                case ConversionKind.MethodGroup:
+                    throw ExceptionUtilities.UnexpectedValue(conversion.Kind);
                 default:
                     return conversion;
             }
@@ -235,6 +256,7 @@ namespace Microsoft.CodeAnalysis.CSharp.Symbols
                 node.InvokedAsExtensionMethod,
                 node.ArgsToParamsOpt,
                 node.ResultKind,
+                node.BinderOpt,
                 rewrittenType);
         }
 
@@ -451,22 +473,11 @@ namespace Microsoft.CodeAnalysis.CSharp.Symbols
                     rewritten.ArgsToParamsOpt,
                     rewritten.ConstantValueOpt,
                     rewritten.InitializerExpressionOpt,
+                    rewritten.BinderOpt,
                     rewritten.Type);
             }
 
             return rewritten;
-        }
-
-        public override BoundNode VisitConversion(BoundConversion conversion)
-        {
-            if (conversion.ConversionKind == ConversionKind.MethodGroup && (object)conversion.SymbolOpt != null)
-            {
-                return RewriteMethodGroupConversion(conversion);
-            }
-            else
-            {
-                return base.VisitConversion(conversion);
-            }
         }
 
         public override BoundNode VisitDelegateCreationExpression(BoundDelegateCreationExpression node)
@@ -474,19 +485,12 @@ namespace Microsoft.CodeAnalysis.CSharp.Symbols
             BoundExpression originalArgument = node.Argument;
             BoundExpression rewrittenArgument = (BoundExpression)this.Visit(originalArgument);
             MethodSymbol method = node.MethodOpt;
-            if (originalArgument.Kind == BoundKind.MethodGroup && rewrittenArgument.Kind == BoundKind.MethodGroup)
+
+            // if the original receiver was BoundKind.BaseReference (i.e. from a method group)
+            // and the receiver is overridden, change the method to point to a wrapper method
+            if (BaseReferenceInReceiverWasRewritten(originalArgument, rewrittenArgument) && method.IsMetadataVirtual())
             {
-                //  if the original argument was a method group AND the receiver was BoundKind.BaseReference
-                //  and the visited argument is still a method group with receiver overridden, change the 
-                //  method to point to the wrapper method
-                var originalReceiver = ((BoundMethodGroup)originalArgument).ReceiverOpt;
-                var newReceiver = ((BoundMethodGroup)rewrittenArgument).ReceiverOpt;
-                if (BaseReferenceInReceiverWasRewritten(originalReceiver, newReceiver) && method.IsMetadataVirtual())
-                {
-                    method = GetMethodWrapperForBaseNonVirtualCall(method, originalArgument.Syntax);
-                    // NOTE: we substitute the method in rewritten bound delegate 
-                    //       creation node, but leave the method group unchanged
-                }
+                method = GetMethodWrapperForBaseNonVirtualCall(method, originalArgument.Syntax);
             }
             method = VisitMethodSymbol(method);
             TypeSymbol type = this.VisitType(node.Type);
@@ -636,64 +640,6 @@ namespace Microsoft.CodeAnalysis.CSharp.Symbols
         {
             return originalReceiver != null && originalReceiver.Kind == BoundKind.BaseReference &&
                    rewrittenReceiver != null && rewrittenReceiver.Kind != BoundKind.BaseReference;
-        }
-
-        private BoundNode RewriteMethodGroupConversion(BoundConversion conversion)
-        {
-            // in a method group conversion, we may need to rewrite the selected method
-            BoundMethodGroup operand = (BoundMethodGroup)conversion.Operand;
-            BoundExpression originalReceiverOpt = operand.ReceiverOpt;
-            BoundExpression receiverOpt;
-
-            if (originalReceiverOpt == null)
-            {
-                receiverOpt = null;
-            }
-            else if (!conversion.IsExtensionMethod && conversion.SymbolOpt.IsStatic)
-            {
-                receiverOpt = new BoundTypeExpression(originalReceiverOpt.Syntax, null, VisitType(originalReceiverOpt.Type));
-            }
-            else
-            {
-                receiverOpt = (BoundExpression)Visit(originalReceiverOpt);
-            }
-
-            TypeSymbol type = this.VisitType(conversion.Type);
-
-            MethodSymbol method = conversion.SymbolOpt;
-
-            //  if the original receiver was a base access and is was rewritten, 
-            //  change the method to point to the wrapper method
-            if (BaseReferenceInReceiverWasRewritten(originalReceiverOpt, receiverOpt) && method.IsMetadataVirtual())
-            {
-                method = GetMethodWrapperForBaseNonVirtualCall(method, conversion.Syntax);
-            }
-
-            method = VisitMethodSymbol(method);
-            operand = operand.Update(
-                TypeMap.SubstituteTypesWithoutModifiers(operand.TypeArgumentsOpt),
-                method.Name,
-                operand.Methods,
-                operand.LookupSymbolOpt,
-                operand.LookupError,
-                operand.Flags,
-                receiverOpt,
-                operand.ResultKind);
-
-            var conversionInfo = conversion.Conversion;
-            if (conversionInfo.Method != (object)method)
-            {
-                conversionInfo = conversionInfo.SetConversionMethod(method);
-            }
-
-            return conversion.Update(
-                operand,
-                conversionInfo,
-                isBaseConversion: conversion.IsBaseConversion,
-                @checked: conversion.Checked,
-                explicitCastInCode: conversion.ExplicitCastInCode,
-                constantValueOpt: conversion.ConstantValueOpt,
-                type: type);
         }
 
         /// <summary>

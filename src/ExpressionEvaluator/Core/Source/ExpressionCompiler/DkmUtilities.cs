@@ -1,4 +1,4 @@
-// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+﻿// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
 using System;
 using System.Collections.Generic;
@@ -7,6 +7,7 @@ using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.Linq;
 using System.Reflection.Metadata;
+using Microsoft.CodeAnalysis.PooledObjects;
 using Microsoft.VisualStudio.Debugger;
 using Microsoft.VisualStudio.Debugger.Clr;
 using Microsoft.VisualStudio.Debugger.Clr.NativeCompilation;
@@ -18,8 +19,6 @@ namespace Microsoft.CodeAnalysis.ExpressionEvaluator
 {
     internal static class DkmUtilities
     {
-        private static readonly Guid s_symUnmanagedReaderClassId = Guid.Parse("B4CE6286-2A6B-3712-A3B7-1EE1DAD467B5");
-
         internal unsafe delegate IntPtr GetMetadataBytesPtrFunction(AssemblyIdentity assemblyIdentity, out uint uSize);
 
         // Return the set of managed module instances from the AppDomain.
@@ -44,11 +43,15 @@ namespace Microsoft.CodeAnalysis.ExpressionEvaluator
                 });
         }
 
-        internal unsafe static ImmutableArray<MetadataBlock> GetMetadataBlocks(this DkmClrRuntimeInstance runtime, DkmClrAppDomain appDomain)
+        internal static ImmutableArray<MetadataBlock> GetMetadataBlocks(
+            this DkmClrRuntimeInstance runtime, 
+            DkmClrAppDomain appDomain, 
+            ImmutableArray<MetadataBlock> previousMetadataBlocks)
         {
             var builder = ArrayBuilder<MetadataBlock>.GetInstance();
             IntPtr ptr;
             uint size;
+            int index = 0;
             foreach (DkmClrModuleInstance module in runtime.GetModulesInAppDomain(appDomain))
             {
                 MetadataBlock block;
@@ -56,7 +59,7 @@ namespace Microsoft.CodeAnalysis.ExpressionEvaluator
                 {
                     ptr = module.GetMetaDataBytesPtr(out size);
                     Debug.Assert(size > 0);
-                    block = GetMetadataBlock(ptr, size);
+                    block = GetMetadataBlock(previousMetadataBlocks, index, ptr, size);
                 }
                 catch (NotImplementedException e) when (module is DkmClrNcModuleInstance)
                 {
@@ -69,10 +72,11 @@ namespace Microsoft.CodeAnalysis.ExpressionEvaluator
                 }
                 Debug.Assert(block.ModuleVersionId == module.Mvid);
                 builder.Add(block);
+                index++;
             }
             // Include "intrinsic method" assembly.
             ptr = runtime.GetIntrinsicAssemblyMetaDataBytesPtr(out size);
-            builder.Add(GetMetadataBlock(ptr, size));
+            builder.Add(GetMetadataBlock(previousMetadataBlocks, index, ptr, size));
             return builder.ToImmutableAndFree();
         }
 
@@ -143,10 +147,31 @@ namespace Microsoft.CodeAnalysis.ExpressionEvaluator
             return new MetadataBlock(moduleVersionId, generationId, ptr, (int)size);
         }
 
+        private static MetadataBlock GetMetadataBlock(ImmutableArray<MetadataBlock> previousMetadataBlocks, int index, IntPtr ptr, uint size)
+        {
+            if (!previousMetadataBlocks.IsDefault && index < previousMetadataBlocks.Length)
+            {
+                var previousBlock = previousMetadataBlocks[index];
+                if (previousBlock.Pointer == ptr && previousBlock.Size == size)
+                {
+                    return previousBlock;
+                }
+            }
+
+            return GetMetadataBlock(ptr, size);
+        }
+
         internal static object GetSymReader(this DkmClrModuleInstance clrModule)
         {
             var module = clrModule.Module; // Null if there are no symbols.
-            return (module == null) ? null : module.GetSymbolInterface(s_symUnmanagedReaderClassId);
+            if (module == null)
+            {
+                return null;
+            }
+            // Use DkmClrModuleInstance.GetSymUnmanagedReader()
+            // rather than DkmModule.GetSymbolInterface() since the
+            // latter does not handle .NET Native modules.
+            return clrModule.GetSymUnmanagedReader();
         }
 
         internal static DkmCompiledClrInspectionQuery ToQueryResult(

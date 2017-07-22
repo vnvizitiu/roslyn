@@ -1,9 +1,9 @@
-// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+﻿// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
 using System;
 using System.Collections.Immutable;
 using System.Windows.Media;
-using Microsoft.CodeAnalysis.Completion;
+using Microsoft.CodeAnalysis.Tags;
 using Microsoft.VisualStudio.Imaging;
 using Microsoft.VisualStudio.Imaging.Interop;
 using Microsoft.VisualStudio.Language.Intellisense;
@@ -53,7 +53,10 @@ namespace Microsoft.CodeAnalysis.Editor.Shared.Extensions
                 case Glyph.EnumInternal:
                     return StandardGlyphGroup.GlyphGroupEnum;
 
-                case Glyph.EnumMember:
+                case Glyph.EnumMemberPublic:
+                case Glyph.EnumMemberProtected:
+                case Glyph.EnumMemberPrivate:
+                case Glyph.EnumMemberInternal:
                     return StandardGlyphGroup.GlyphGroupEnumMember;
 
                 case Glyph.Error:
@@ -221,7 +224,7 @@ namespace Microsoft.CodeAnalysis.Editor.Shared.Extensions
             switch (glyph)
             {
                 case Glyph.None:
-                    return default(ImageMoniker);
+                    return default;
 
                 case Glyph.Assembly:
                     return KnownMonikers.Assembly;
@@ -272,7 +275,10 @@ namespace Microsoft.CodeAnalysis.Editor.Shared.Extensions
                 case Glyph.EnumInternal:
                     return KnownMonikers.EnumerationInternal;
 
-                case Glyph.EnumMember:
+                case Glyph.EnumMemberPublic:
+                case Glyph.EnumMemberProtected:
+                case Glyph.EnumMemberPrivate:
+                case Glyph.EnumMemberInternal:
                     return KnownMonikers.EnumerationItemPublic;
 
                 case Glyph.Error:
@@ -403,16 +409,16 @@ namespace Microsoft.CodeAnalysis.Editor.Shared.Extensions
             {
                 switch (tag)
                 {
-                    case CompletionTags.Assembly:
+                    case WellKnownTags.Assembly:
                         return Glyph.Assembly;
 
-                    case CompletionTags.File:
+                    case WellKnownTags.File:
                         return tags.Contains(LanguageNames.VisualBasic) ? Glyph.BasicFile : Glyph.CSharpFile;
 
-                    case CompletionTags.Project:
+                    case WellKnownTags.Project:
                         return tags.Contains(LanguageNames.VisualBasic) ? Glyph.BasicProject : Glyph.CSharpProject;
 
-                    case CompletionTags.Class:
+                    case WellKnownTags.Class:
                         switch (GetAccessibility(tags))
                         {
                             case Accessibility.Protected:
@@ -426,7 +432,7 @@ namespace Microsoft.CodeAnalysis.Editor.Shared.Extensions
                                 return Glyph.ClassPublic;
                         }
 
-                    case CompletionTags.Constant:
+                    case WellKnownTags.Constant:
                         switch (GetAccessibility(tags))
                         {
                             case Accessibility.Protected:
@@ -440,7 +446,7 @@ namespace Microsoft.CodeAnalysis.Editor.Shared.Extensions
                                 return Glyph.ConstantPublic;
                         }
 
-                    case CompletionTags.Delegate:
+                    case WellKnownTags.Delegate:
                         switch (GetAccessibility(tags))
                         {
                             case Accessibility.Protected:
@@ -454,7 +460,7 @@ namespace Microsoft.CodeAnalysis.Editor.Shared.Extensions
                                 return Glyph.DelegatePublic;
                         }
 
-                    case CompletionTags.Enum:
+                    case WellKnownTags.Enum:
                         switch (GetAccessibility(tags))
                         {
                             case Accessibility.Protected:
@@ -468,24 +474,24 @@ namespace Microsoft.CodeAnalysis.Editor.Shared.Extensions
                                 return Glyph.EnumPublic;
                         }
 
-                    case CompletionTags.EnumMember:
+                    case WellKnownTags.EnumMember:
                         switch (GetAccessibility(tags))
                         {
                             case Accessibility.Protected:
-                                return Glyph.EnumMember;
+                                return Glyph.EnumMemberProtected;
                             case Accessibility.Private:
-                                return Glyph.EnumMember;
+                                return Glyph.EnumMemberPrivate;
                             case Accessibility.Internal:
-                                return Glyph.EnumMember;
+                                return Glyph.EnumMemberInternal;
                             case Accessibility.Public:
                             default:
-                                return Glyph.EnumMember;
+                                return Glyph.EnumMemberPublic;
                         }
 
-                    case CompletionTags.Error:
+                    case WellKnownTags.Error:
                         return Glyph.Error;
 
-                    case CompletionTags.Event:
+                    case WellKnownTags.Event:
                         switch (GetAccessibility(tags))
                         {
                             case Accessibility.Protected:
@@ -499,7 +505,7 @@ namespace Microsoft.CodeAnalysis.Editor.Shared.Extensions
                                 return Glyph.EventPublic;
                         }
 
-                    case CompletionTags.ExtensionMethod:
+                    case WellKnownTags.ExtensionMethod:
                         switch (GetAccessibility(tags))
                         {
                             case Accessibility.Protected:
@@ -513,7 +519,7 @@ namespace Microsoft.CodeAnalysis.Editor.Shared.Extensions
                                 return Glyph.ExtensionMethodPublic;
                         }
 
-                    case CompletionTags.Field:
+                    case WellKnownTags.Field:
                         switch (GetAccessibility(tags))
                         {
                             case Accessibility.Protected:
@@ -527,7 +533,7 @@ namespace Microsoft.CodeAnalysis.Editor.Shared.Extensions
                                 return Glyph.FieldPublic;
                         }
 
-                    case CompletionTags.Interface:
+                    case WellKnownTags.Interface:
                         switch (GetAccessibility(tags))
                         {
                             case Accessibility.Protected:
@@ -541,22 +547,22 @@ namespace Microsoft.CodeAnalysis.Editor.Shared.Extensions
                                 return Glyph.InterfacePublic;
                         }
 
-                    case CompletionTags.Intrinsic:
+                    case WellKnownTags.Intrinsic:
                         return Glyph.Intrinsic;
 
-                    case CompletionTags.Keyword:
+                    case WellKnownTags.Keyword:
                         return Glyph.Keyword;
 
-                    case CompletionTags.Label:
+                    case WellKnownTags.Label:
                         return Glyph.Label;
 
-                    case CompletionTags.Local:
+                    case WellKnownTags.Local:
                         return Glyph.Local;
 
-                    case CompletionTags.Namespace:
+                    case WellKnownTags.Namespace:
                         return Glyph.Namespace;
 
-                    case CompletionTags.Method:
+                    case WellKnownTags.Method:
                         switch (GetAccessibility(tags))
                         {
                             case Accessibility.Protected:
@@ -570,7 +576,7 @@ namespace Microsoft.CodeAnalysis.Editor.Shared.Extensions
                                 return Glyph.MethodPublic;
                         }
 
-                    case CompletionTags.Module:
+                    case WellKnownTags.Module:
                         switch (GetAccessibility(tags))
                         {
                             case Accessibility.Protected:
@@ -584,16 +590,16 @@ namespace Microsoft.CodeAnalysis.Editor.Shared.Extensions
                                 return Glyph.ModulePublic;
                         }
 
-                    case CompletionTags.Folder:
+                    case WellKnownTags.Folder:
                         return Glyph.OpenFolder;
 
-                    case CompletionTags.Operator:
+                    case WellKnownTags.Operator:
                         return Glyph.Operator;
 
-                    case CompletionTags.Parameter:
+                    case WellKnownTags.Parameter:
                         return Glyph.Parameter;
 
-                    case CompletionTags.Property:
+                    case WellKnownTags.Property:
                         switch (GetAccessibility(tags))
                         {
                             case Accessibility.Protected:
@@ -607,13 +613,16 @@ namespace Microsoft.CodeAnalysis.Editor.Shared.Extensions
                                 return Glyph.PropertyPublic;
                         }
 
-                    case CompletionTags.RangeVariable:
+                    case WellKnownTags.RangeVariable:
                         return Glyph.RangeVariable;
 
-                    case CompletionTags.Reference:
+                    case WellKnownTags.Reference:
                         return Glyph.Reference;
 
-                    case CompletionTags.Structure:
+                    case WellKnownTags.NuGet:
+                        return Glyph.NuGet;
+
+                    case WellKnownTags.Structure:
                         switch (GetAccessibility(tags))
                         {
                             case Accessibility.Protected:
@@ -627,16 +636,16 @@ namespace Microsoft.CodeAnalysis.Editor.Shared.Extensions
                                 return Glyph.StructurePublic;
                         }
 
-                    case CompletionTags.TypeParameter:
+                    case WellKnownTags.TypeParameter:
                         return Glyph.TypeParameter;
 
-                    case CompletionTags.Snippet:
+                    case WellKnownTags.Snippet:
                         return Glyph.Snippet;
 
-                    case CompletionTags.Warning:
+                    case WellKnownTags.Warning:
                         return Glyph.CompletionWarning;
 
-                case CompletionTags.StatusInformation:
+                case WellKnownTags.StatusInformation:
                     return Glyph.StatusInformation;
                 }
             }
@@ -646,19 +655,19 @@ namespace Microsoft.CodeAnalysis.Editor.Shared.Extensions
 
         private static Accessibility GetAccessibility(ImmutableArray<string> tags)
         {
-            if (tags.Contains(CompletionTags.Public))
+            if (tags.Contains(WellKnownTags.Public))
             {
                 return Accessibility.Public;
             }
-            else if (tags.Contains(CompletionTags.Protected))
+            else if (tags.Contains(WellKnownTags.Protected))
             {
                 return Accessibility.Protected;
             }
-            else if (tags.Contains(CompletionTags.Internal))
+            else if (tags.Contains(WellKnownTags.Internal))
             {
                 return Accessibility.Internal;
             }
-            else if (tags.Contains(CompletionTags.Private))
+            else if (tags.Contains(WellKnownTags.Private))
             {
                 return Accessibility.Private;
             }

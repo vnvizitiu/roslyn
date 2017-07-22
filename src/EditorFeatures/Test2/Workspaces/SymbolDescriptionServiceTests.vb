@@ -1,4 +1,4 @@
-' Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+﻿' Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
 Imports System.Threading
 Imports System.Threading.Tasks
@@ -30,7 +30,10 @@ Namespace Microsoft.CodeAnalysis.Editor.UnitTests.Workspaces
             End If
 
             Dim semanticModel = Await document.GetSemanticModelAsync()
-            Dim symbol = semanticModel.GetSymbols(commonSyntaxToken, document.Project.Solution.Workspace, bindLiteralsToUnderlyingType:=True, cancellationToken:=CancellationToken.None).AsImmutable()
+            Dim symbol = semanticModel.GetSemanticInfo(commonSyntaxToken, document.Project.Solution.Workspace, CancellationToken.None).
+                                       GetSymbols(includeType:=True).
+                                       AsImmutable()
+
             Dim symbolDescriptionService = languageServiceProvider.GetService(Of ISymbolDisplayService)()
 
             Dim actualDescription = Await symbolDescriptionService.ToDescriptionStringAsync(workspace, semanticModel, cursorPosition, symbol)
@@ -44,13 +47,13 @@ Namespace Microsoft.CodeAnalysis.Editor.UnitTests.Workspaces
         End Function
 
         Private Async Function TestCSharpAsync(workspaceDefinition As XElement, expectedDescription As String) As Tasks.Task
-            Using workspace = Await TestWorkspace.CreateAsync(workspaceDefinition)
+            Using workspace = TestWorkspace.Create(workspaceDefinition)
                 Await TestAsync(GetLanguageServiceProvider(workspace, LanguageNames.CSharp), workspace, expectedDescription)
             End Using
         End Function
 
         Private Async Function TestBasicAsync(workspaceDefinition As XElement, expectedDescription As String) As Tasks.Task
-            Using workspace = Await TestWorkspace.CreateAsync(workspaceDefinition)
+            Using workspace = TestWorkspace.Create(workspaceDefinition)
                 Await TestAsync(GetLanguageServiceProvider(workspace, LanguageNames.VisualBasic), workspace, expectedDescription)
             End Using
         End Function

@@ -10,6 +10,7 @@ using System.Runtime.InteropServices;
 using System.Threading;
 using Microsoft.CodeAnalysis.CSharp.Symbols;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.CodeAnalysis.PooledObjects;
 using Microsoft.CodeAnalysis.Text;
 using Roslyn.Utilities;
 
@@ -160,14 +161,6 @@ namespace Microsoft.CodeAnalysis.CSharp.Symbols
         internal override ImmutableArray<NamedTypeSymbol> GetInterfacesToEmit()
         {
             throw ExceptionUtilities.Unreachable;
-        }
-
-        protected sealed override ImmutableArray<NamedTypeSymbol> MakeAllInterfaces()
-        {
-            // Because declared types will have been checked for "uniqueness of implemented interfaces" (C# 4 spec, 13.4.2),
-            // we are guaranteed that none of these substitutions collide in a correct program.  Consequently, we can simply
-            // substitute the original interfaces.
-            return _unbound ? ImmutableArray<NamedTypeSymbol>.Empty : Map.SubstituteNamedTypes(OriginalDefinition.AllInterfacesNoUseSiteDiagnostics);
         }
 
         public sealed override IEnumerable<string> MemberNames

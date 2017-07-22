@@ -8,6 +8,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.CodeAnalysis.FindSymbols;
 using Microsoft.CodeAnalysis.LanguageServices;
+using Microsoft.CodeAnalysis.PooledObjects;
 using Microsoft.CodeAnalysis.Shared.Extensions;
 using Microsoft.CodeAnalysis.Text;
 using Roslyn.Utilities;
@@ -34,7 +35,7 @@ namespace Microsoft.CodeAnalysis.Rename
                 var symbol = await SymbolFinder.FindSymbolAtPositionAsync(document, position, cancellationToken: cancellationToken).ConfigureAwait(false);
                 if (symbol == null)
                 {
-                    return default(SymbolAndProjectId);
+                    return default;
                 }
 
                 var symbolAndProjectId = SymbolAndProjectId.Create(symbol, document.Project.Id);
@@ -176,9 +177,12 @@ namespace Microsoft.CodeAnalysis.Rename
                 {
                     var target = ((IAliasSymbol)originalSymbol).Target;
 
-                    return target.TypeSwitch(
-                        (INamedTypeSymbol nt) => nt.ConstructedFrom.Equals(referencedSymbol),
-                        (INamespaceOrTypeSymbol s) => s.Equals(referencedSymbol));
+                    switch (target)
+                    {
+                        case INamedTypeSymbol nt: return nt.ConstructedFrom.Equals(referencedSymbol);
+                        case INamespaceOrTypeSymbol s: return s.Equals(referencedSymbol);
+                        default: return false;
+                    }
                 }
 
                 // cascade from property accessor to property (someone in C# renames base.get_X, or the accessor override)
@@ -237,7 +241,7 @@ namespace Microsoft.CodeAnalysis.Rename
                     }
                 }
 
-                return default(SymbolAndProjectId);
+                return default;
             }
 
             private static async Task<bool> IsPropertyAccessorOrAnOverride(

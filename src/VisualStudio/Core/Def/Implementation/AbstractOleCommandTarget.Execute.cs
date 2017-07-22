@@ -74,7 +74,7 @@ namespace Microsoft.VisualStudio.LanguageServices.Implementation
             }
             finally
             {
-                this.CurrentlyExecutingCommand = default(uint);
+                this.CurrentlyExecutingCommand = default;
             }
         }
 
@@ -214,9 +214,9 @@ namespace Microsoft.VisualStudio.LanguageServices.Implementation
                             {
                                 count = 1;
                             }
-                            else if (o is int)
+                            else if (o is int i)
                             {
-                                count = (int)o;
+                                count = i;
                             }
                             else
                             {
@@ -459,11 +459,6 @@ namespace Microsoft.VisualStudio.LanguageServices.Implementation
                     ExecuteParameterInfo(subjectBuffer, contentType, executeNextCommandTarget);
                     break;
 
-                case VSConstants.VSStd2KCmdID.QUICKINFO:
-                    GCManager.UseLowLatencyModeForProcessingUserInput();
-                    ExecuteQuickInfo(subjectBuffer, contentType, executeNextCommandTarget);
-                    break;
-
                 case VSConstants.VSStd2KCmdID.RENAME:
                     GCManager.UseLowLatencyModeForProcessingUserInput();
                     ExecuteRename(subjectBuffer, contentType, executeNextCommandTarget);
@@ -643,13 +638,6 @@ namespace Microsoft.VisualStudio.LanguageServices.Implementation
         {
             CurrentHandlers.Execute(contentType,
                 args: new RenameCommandArgs(ConvertTextView(), subjectBuffer),
-                lastHandler: executeNextCommandTarget);
-        }
-
-        protected void ExecuteQuickInfo(ITextBuffer subjectBuffer, IContentType contentType, Action executeNextCommandTarget)
-        {
-            CurrentHandlers.Execute(contentType,
-                args: new InvokeQuickInfoCommandArgs(ConvertTextView(), subjectBuffer),
                 lastHandler: executeNextCommandTarget);
         }
 

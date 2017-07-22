@@ -23,6 +23,7 @@ using Microsoft.CodeAnalysis.Test.Utilities;
 using Microsoft.CodeAnalysis.Text;
 using Microsoft.CodeAnalysis.VisualBasic;
 using Roslyn.Test.Utilities;
+using Roslyn.Utilities;
 using Xunit;
 using CS = Microsoft.CodeAnalysis.CSharp;
 
@@ -516,9 +517,7 @@ namespace Microsoft.CodeAnalysis.UnitTests
                 .AddDocument(did, "foo.cs", text);
 
             var document = sol.GetDocument(did);
-
-            SyntaxNode root;
-            Assert.Equal(false, document.TryGetSyntaxRoot(out root));
+            Assert.Equal(false, document.TryGetSyntaxRoot(out var root));
 
             root = await document.GetSyntaxRootAsync();
             Assert.NotNull(root);
@@ -571,11 +570,9 @@ namespace Microsoft.CodeAnalysis.UnitTests
             var doc2 = sol2.GetDocument(did);
             var tree2 = doc2.GetSyntaxTreeAsync().Result;
             var root2 = tree2.GetRoot();
-
             // text should not be available yet (it should be defer created from the node)
             // and getting the document or root should not cause it to be created.
-            SourceText text2;
-            Assert.Equal(false, tree2.TryGetText(out text2));
+            Assert.Equal(false, tree2.TryGetText(out var text2));
 
             text2 = tree2.GetText();
             Assert.NotNull(text2);
@@ -686,7 +683,7 @@ namespace Microsoft.CodeAnalysis.UnitTests
         }
 
         [MethodImpl(MethodImplOptions.NoInlining)]
-        [Fact, Trait(Traits.Feature, Traits.Features.Workspace)]
+        [Fact(Skip = "https://github.com/dotnet/roslyn/issues/19427"), Trait(Traits.Feature, Traits.Features.Workspace)]
         public void TestGetRecoveredTextAsync()
         {
             var pid = ProjectId.CreateNewId();
@@ -1398,13 +1395,7 @@ public class C : A {
         [Fact]
         public void TestProjectCompletenessWithMultipleProjects()
         {
-            Project csBrokenProject;
-            Project vbNormalProject;
-            Project dependsOnBrokenProject;
-            Project dependsOnVbNormalProject;
-            Project transitivelyDependsOnBrokenProjects;
-            Project transitivelyDependsOnNormalProjects;
-            GetMultipleProjects(out csBrokenProject, out vbNormalProject, out dependsOnBrokenProject, out dependsOnVbNormalProject, out transitivelyDependsOnBrokenProjects, out transitivelyDependsOnNormalProjects);
+            GetMultipleProjects(out var csBrokenProject, out var vbNormalProject, out var dependsOnBrokenProject, out var dependsOnVbNormalProject, out var transitivelyDependsOnBrokenProjects, out var transitivelyDependsOnNormalProjects);
 
             // check flag for a broken project itself
             Assert.False(csBrokenProject.HasSuccessfullyLoadedAsync().Result);
@@ -1425,6 +1416,81 @@ public class C : A {
             // check flag for normal project that indirectly reference only normal project
             // normal project -> normal project -> normal project
             Assert.True(transitivelyDependsOnNormalProjects.HasSuccessfullyLoadedAsync().Result);
+        }
+
+        [Fact]
+        public async Task TestMassiveFileSize()
+        {
+            // set max file length to 1 bytes
+            var maxLength = 1;
+            var workspace = new AdhocWorkspace(TestHost.Services, ServiceLayer.Host);
+            workspace.Options = workspace.Options.WithChangedOption(FileTextLoaderOptions.FileLengthThreshold, maxLength);
+
+            using (var root = new TempRoot())
+            {
+                var file = root.CreateFile(prefix: "massiveFile", extension: ".cs").WriteAllText("hello");
+
+                var loader = new FileTextLoader(file.Path, Encoding.UTF8);
+                var textLength = FileUtilities.GetFileLength(file.Path);
+
+                var expected = string.Format(WorkspacesResources.File_0_size_of_1_exceeds_maximum_allowed_size_of_2, file.Path, textLength, maxLength);
+                var exceptionThrown = false;
+
+                try
+                {
+                    // test async one
+                    var unused = await loader.LoadTextAndVersionAsync(workspace, DocumentId.CreateNewId(ProjectId.CreateNewId()), CancellationToken.None);
+                }
+                catch (InvalidDataException ex)
+                {
+                    exceptionThrown = true;
+                    Assert.Equal(expected, ex.Message);
+                }
+
+                Assert.True(exceptionThrown);
+
+                exceptionThrown = false;
+                try
+                {
+                    // test sync one
+                    var unused = loader.LoadTextAndVersionSynchronously(workspace, DocumentId.CreateNewId(ProjectId.CreateNewId()), CancellationToken.None);
+                }
+                catch (InvalidDataException ex)
+                {
+                    exceptionThrown = true;
+                    Assert.Equal(expected, ex.Message);
+                }
+
+                Assert.True(exceptionThrown);
+            }
+        }
+
+        [Fact, Trait(Traits.Feature, Traits.Features.Workspace)]
+        [WorkItem(18697, "https://github.com/dotnet/roslyn/issues/18697")]
+        public void TestWithSyntaxTree()
+        {
+            // get one to get to syntax tree factory
+            var dummyProject = CreateNotKeptAliveSolution().AddProject("dummy", "dummy", LanguageNames.CSharp);
+
+            var factory = dummyProject.LanguageServices.SyntaxTreeFactory;
+
+            // create the origin tree
+            var strongTree = factory.ParseSyntaxTree("dummy", dummyProject.ParseOptions, SourceText.From("// emtpy"), CancellationToken.None);
+
+            // create recoverable tree off the original tree
+            var recoverableTree = factory.CreateRecoverableTree(
+                dummyProject.Id, 
+                strongTree.FilePath, 
+                strongTree.Options, 
+                new ConstantValueSource<TextAndVersion>(TextAndVersion.Create(strongTree.GetText(), VersionStamp.Create(), strongTree.FilePath)), 
+                strongTree.GetText().Encoding, 
+                strongTree.GetRoot());
+
+            // create new tree before it ever getting root node
+            var newTree = recoverableTree.WithFilePath("different/dummy");
+
+            // this shouldn't throw
+            var root = newTree.GetRoot();
         }
 
         private static void GetMultipleProjects(

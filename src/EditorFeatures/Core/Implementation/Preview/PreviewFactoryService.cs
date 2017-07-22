@@ -1,4 +1,4 @@
-// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+﻿// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
 using System;
 using System.Collections.Generic;
@@ -14,6 +14,7 @@ using Microsoft.CodeAnalysis.Editor.Shared.Utilities;
 using Microsoft.CodeAnalysis.Shared.Extensions;
 using Microsoft.CodeAnalysis.Text;
 using Microsoft.CodeAnalysis.Text.Shared.Extensions;
+using Microsoft.CodeAnalysis.Utilities;
 using Microsoft.VisualStudio.Text;
 using Microsoft.VisualStudio.Text.Differencing;
 using Microsoft.VisualStudio.Text.Editor;
@@ -48,6 +49,8 @@ namespace Microsoft.CodeAnalysis.Editor.Implementation.Preview
             IDifferenceBufferFactoryService differenceBufferService,
             IWpfDifferenceViewerFactoryService differenceViewerService)
         {
+            Contract.ThrowIfTrue(this.ForegroundKind == ForegroundThreadDataKind.Unknown);
+
             _textBufferFactoryService = textBufferFactoryService;
             _contentTypeRegistryService = contentTypeRegistryService;
             _projectionBufferFactoryService = projectionBufferFactoryService;
@@ -553,8 +556,10 @@ namespace Microsoft.CodeAnalysis.Editor.Implementation.Preview
                 document.GetTextAsync(cancellationToken).WaitAndGetResult(cancellationToken).ToString(), contentType);
         }
 
-        private async Task<object> CreateNewDifferenceViewerAsync(PreviewWorkspace leftWorkspace, PreviewWorkspace rightWorkspace,
-            IProjectionBuffer originalBuffer, IProjectionBuffer changedBuffer, double zoomLevel, CancellationToken cancellationToken)
+        private async Task<object> CreateNewDifferenceViewerAsync(
+            PreviewWorkspace leftWorkspace, PreviewWorkspace rightWorkspace,
+            IProjectionBuffer originalBuffer, IProjectionBuffer changedBuffer,
+            double zoomLevel, CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
@@ -564,24 +569,27 @@ namespace Microsoft.CodeAnalysis.Editor.Implementation.Preview
             Contract.ThrowIfTrue((leftWorkspace == null) && (rightWorkspace == null));
 
             var diffBuffer = _differenceBufferService.CreateDifferenceBuffer(
-                    originalBuffer, changedBuffer,
-                    new StringDifferenceOptions(), disableEditing: true);
+                originalBuffer, changedBuffer,
+                new StringDifferenceOptions(), disableEditing: true);
 
             var diffViewer = _differenceViewerService.CreateDifferenceView(diffBuffer, _previewRoleSet);
 
             diffViewer.Closed += (s, e) =>
             {
-                if (leftWorkspace != null)
-                {
-                    leftWorkspace.Dispose();
-                    leftWorkspace = null;
-                }
+                // Workaround Editor bug.  The editor has an issue where they sometimes crash when 
+                // trying to apply changes to projection buffer.  So, when the user actually invokes
+                // a SuggestedAction we may then edit a text buffer, which the editor will then 
+                // try to propagate through the projections we have here over that buffer.  To ensure
+                // that that doesn't happen, we clear out the projections first so that this crash
+                // won't happen.
+                originalBuffer.DeleteSpans(0, originalBuffer.CurrentSnapshot.SpanCount);
+                changedBuffer.DeleteSpans(0, changedBuffer.CurrentSnapshot.SpanCount);
 
-                if (rightWorkspace != null)
-                {
-                    rightWorkspace.Dispose();
-                    rightWorkspace = null;
-                }
+                leftWorkspace?.Dispose();
+                leftWorkspace = null;
+
+                rightWorkspace?.Dispose();
+                rightWorkspace = null;
             };
 
             const string DiffOverviewMarginName = "deltadifferenceViewerOverview";
@@ -615,15 +623,8 @@ namespace Microsoft.CodeAnalysis.Editor.Implementation.Preview
             // We use ConfigureAwait(true) to stay on the UI thread.
             await diffViewer.SizeToFitAsync().ConfigureAwait(true);
 
-            if (leftWorkspace != null)
-            {
-                leftWorkspace.EnableDiagnostic();
-            }
-
-            if (rightWorkspace != null)
-            {
-                rightWorkspace.EnableDiagnostic();
-            }
+            leftWorkspace?.EnableDiagnostic();
+            rightWorkspace?.EnableDiagnostic();
 
             return new DifferenceViewerPreview(diffViewer);
         }

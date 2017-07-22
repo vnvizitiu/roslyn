@@ -10215,7 +10215,7 @@ class Test
         (new Test()).Foo();
     }
 }";
-            var comp = CreateCompilationWithMscorlib(source, options: TestOptions.ReleaseDll);
+            var comp = CreateStandardCompilation(source, options: TestOptions.ReleaseDll);
 
             // Both Dev10 and Roslyn currently generate unverifiable code for this case...
             // Dev10 reports warning CS0626: Method, operator, or accessor 'Test.Foo()' is marked external
@@ -10584,11 +10584,11 @@ class C
             decimal d;
             if (decimal.TryParse("0E1", System.Globalization.NumberStyles.AllowExponent, null, out d))
             {
-                CreateCompilationWithMscorlib(source).VerifyDiagnostics();
+                CreateStandardCompilation(source).VerifyDiagnostics();
             }
             else
             {
-                CreateCompilationWithMscorlib(source).VerifyDiagnostics(
+                CreateStandardCompilation(source).VerifyDiagnostics(
                     // (6,27): error CS0594: Floating-point constant is outside the range of type 'decimal'
                     Diagnostic(ErrorCode.ERR_FloatOverflow, "0E1M").WithArguments("decimal").WithLocation(6, 27),
                     // (7,27): error CS0594: Floating-point constant is outside the range of type 'decimal'
@@ -11513,7 +11513,7 @@ public class DefaultParameterValues
             System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) { }
 }
 ";
-            var compilation1 = CreateCompilationWithMscorlib(source1);
+            var compilation1 = CreateStandardCompilation(source1);
 
             var source2 = @"
 public class Test
@@ -12469,7 +12469,7 @@ class C
         Console.WriteLine((decimal)2e-30f);
     }
 }";
-            CreateCompilationWithMscorlib(source).VerifyDiagnostics(
+            CreateStandardCompilation(source).VerifyDiagnostics(
                 // (6,27): error CS0031: Constant value '-1E+30' cannot be converted to a 'decimal'
                 //         Console.WriteLine((decimal)-1e30d); // Dev11: CS0031
                 Diagnostic(ErrorCode.ERR_ConstOutOfRange, "(decimal)-1e30d").WithArguments("-1E+30", "decimal"),
@@ -12491,7 +12491,7 @@ class C
         }
     }
 }";
-            CreateCompilationWithMscorlib(source).VerifyDiagnostics(
+            CreateStandardCompilation(source).VerifyDiagnostics(
                 // (8,31): error CS0031: Constant value '-3E+30' cannot be converted to a 'decimal'
                 //             Console.WriteLine((decimal)-3e30d); // Dev11: CS0030
                 Diagnostic(ErrorCode.ERR_ConstOutOfRange, "(decimal)-3e30d").WithArguments("-3E+30", "decimal"),
@@ -12810,7 +12810,7 @@ expectedOutput: "-100");
         return () => { }; // generate lambda
     }
 }";
-            var compilation = CreateCompilationWithMscorlib(source, options: TestOptions.ReleaseDll.WithConcurrentBuild(false));
+            var compilation = CreateStandardCompilation(source, options: TestOptions.ReleaseDll.WithConcurrentBuild(false));
             var options = compilation.Options;
             var diagnostics = DiagnosticBag.GetInstance();
 
@@ -12826,6 +12826,7 @@ expectedOutput: "-100");
                 compilation: compilation,
                 moduleBeingBuiltOpt: module,
                 emittingPdb: false,
+                emitTestCoverageData: false,
                 hasDeclarationErrors: false,
                 diagnostics: diagnostics,
                 filterOpt: null,
@@ -12935,8 +12936,8 @@ class C
 }
 ";
 
-            var compRelease = CreateCompilationWithMscorlib(source, options: TestOptions.ReleaseExe);
-            var compDebug = CreateCompilationWithMscorlib(source, options: TestOptions.DebugExe);
+            var compRelease = CreateStandardCompilation(source, options: TestOptions.ReleaseExe);
+            var compDebug = CreateStandardCompilation(source, options: TestOptions.DebugExe);
 
             // (2) is not met.
             CompileAndVerify(compRelease).VerifyIL("C.Main", @"
@@ -12979,7 +12980,7 @@ class C
 }
 ";
             // Nop after Debugger.Break(), even though it isn't at the end of a statement.
-            var comp = CreateCompilationWithMscorlib(source, options: TestOptions.DebugExe);
+            var comp = CreateStandardCompilation(source, options: TestOptions.DebugExe);
             var v = CompileAndVerify(comp);
 
             v.VerifyIL("C.Main", @"
@@ -13980,7 +13981,7 @@ class C
         return __reftype(__makeref(o));
     }
 }";
-            compilation = CreateCompilationWithMscorlib(text);
+            compilation = CreateStandardCompilation(text);
             compilation.VerifyDiagnostics();
             using (var stream = new MemoryStream())
             {
@@ -15486,6 +15487,37 @@ class Program
 ";
             CompileAndVerify(source, additionalRefs: new[] { SystemRef, SystemCoreRef },
                 expectedOutput: "0");
+        }
+
+        [Fact, WorkItem(9703, "https://github.com/dotnet/roslyn/issues/9703")]
+        public void IgnoredConversion()
+        {
+            string source = @"
+using System;
+
+public class Form1 {
+    public class BadCompiler {
+        public DateTime? Value {get; set;}
+    }
+
+    private BadCompiler TestObj = new BadCompiler();
+
+    public void IPE() {
+        object o;
+        o = TestObj.Value;
+    }
+}";
+            var compilation = CompileAndVerify(source);
+            compilation.VerifyIL("Form1.IPE", @"
+{
+    // Code size       13 (0xd)
+    .maxstack  1
+    IL_0000:  ldarg.0
+    IL_0001:  ldfld      ""Form1.BadCompiler Form1.TestObj""
+    IL_0006:  callvirt   ""System.DateTime? Form1.BadCompiler.Value.get""
+    IL_000b:  pop
+    IL_000c:  ret
+}");
         }
 
     }

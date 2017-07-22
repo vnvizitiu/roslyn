@@ -1,4 +1,4 @@
-// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+﻿// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
 using System;
 using System.Collections.Generic;
@@ -324,16 +324,22 @@ namespace Microsoft.CodeAnalysis.ReplaceMethodWithProperty
             var service = updatedDocument.GetLanguageService<IReplaceMethodWithPropertyService>();
 
             var semanticModel = await updatedDocument.GetSemanticModelAsync(cancellationToken).ConfigureAwait(false);
+            var syntaxTree = await updatedDocument.GetSyntaxTreeAsync(cancellationToken).ConfigureAwait(false);
             var root = await updatedDocument.GetSyntaxRootAsync(cancellationToken).ConfigureAwait(false);
 
             var editor = new SyntaxEditor(root, updatedSolution.Workspace);
+
+            var documentOptions = await updatedDocument.GetOptionsAsync(cancellationToken).ConfigureAwait(false);
+            var parseOptions = syntaxTree.Options;
 
             // First replace all the get methods with properties.
             foreach (var getSetPair in getSetPairs)
             {
                 cancellationToken.ThrowIfCancellationRequested();
 
-                service.ReplaceGetMethodWithProperty(editor, semanticModel, getSetPair, propertyName, nameChanged);
+                service.ReplaceGetMethodWithProperty(
+                    documentOptions, parseOptions, editor, semanticModel,
+                    getSetPair, propertyName, nameChanged);
             }
 
             // Then remove all the set methods.

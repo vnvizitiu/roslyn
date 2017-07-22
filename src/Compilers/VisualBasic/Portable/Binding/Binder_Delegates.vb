@@ -2,6 +2,7 @@
 
 Imports System.Collections.Immutable
 Imports System.Runtime.InteropServices
+Imports Microsoft.CodeAnalysis.PooledObjects
 Imports Microsoft.CodeAnalysis.VisualBasic.Symbols
 Imports Microsoft.CodeAnalysis.VisualBasic.Syntax
 Imports TypeKind = Microsoft.CodeAnalysis.TypeKind
@@ -142,7 +143,7 @@ Namespace Microsoft.CodeAnalysis.VisualBasic
                     boundFirstArgument = New BoundBadExpression(argumentSyntax,
                                                                 LookupResultKind.Empty,
                                                                 ImmutableArray(Of Symbol).Empty,
-                                                                ImmutableArray(Of BoundNode).Empty,
+                                                                ImmutableArray(Of BoundExpression).Empty,
                                                                 ErrorTypeSymbol.UnknownResultType,
                                                                 hasErrors:=True)
                 End If
@@ -172,7 +173,7 @@ Namespace Microsoft.CodeAnalysis.VisualBasic
                     boundArguments(argumentIndex) = New BoundBadExpression(argumentSyntax,
                                                                            LookupResultKind.Empty,
                                                                            ImmutableArray(Of Symbol).Empty,
-                                                                           ImmutableArray(Of BoundNode).Empty,
+                                                                           ImmutableArray(Of BoundExpression).Empty,
                                                                            ErrorTypeSymbol.UnknownResultType,
                                                                            hasErrors:=True)
                 End If
@@ -192,7 +193,7 @@ Namespace Microsoft.CodeAnalysis.VisualBasic
             End If
 
             Return BadExpression(node,
-                                 ImmutableArray.Create(Of BoundNode)(DirectCast(boundArguments, BoundNode())),
+                                 ImmutableArray.Create(boundArguments),
                                  delegateType)
         End Function
 
@@ -631,9 +632,12 @@ Namespace Microsoft.CodeAnalysis.VisualBasic
 
             ' determine conversions based on return type
             Dim useSiteDiagnostics As HashSet(Of DiagnosticInfo) = Nothing
+            Dim targetMethodSymbol = DirectCast(analysisResult.Candidate.UnderlyingSymbol, MethodSymbol)
 
             If Not ignoreMethodReturnType Then
-                methodConversions = methodConversions Or Conversions.ClassifyMethodConversionBasedOnReturnType(analysisResult.Candidate.ReturnType, toMethod.ReturnType, useSiteDiagnostics)
+                methodConversions = methodConversions Or
+                                    Conversions.ClassifyMethodConversionBasedOnReturn(targetMethodSymbol.ReturnType, targetMethodSymbol.ReturnsByRef,
+                                                                                      toMethod.ReturnType, toMethod.ReturnsByRef, useSiteDiagnostics)
 
                 If diagnostics.Add(addressOfOperandSyntax, useSiteDiagnostics) Then
                     ' Suppress additional diagnostics 
@@ -645,7 +649,7 @@ Namespace Microsoft.CodeAnalysis.VisualBasic
                 Debug.Assert(toMethod.ParameterCount > 0)
 
                 ' special flag for ignoring all arguments (zero argument relaxation)
-                If analysisResult.Candidate.ParameterCount = 0 Then
+                If targetMethodSymbol.ParameterCount = 0 Then
                     methodConversions = methodConversions Or MethodConversionKind.AllArgumentsIgnored
                 Else
                     ' We can get here if all method's parameters are Optional/ParamArray, however, 
@@ -670,7 +674,15 @@ Namespace Microsoft.CodeAnalysis.VisualBasic
                 End If
             End If
 
-            Dim targetMethodSymbol = DirectCast(analysisResult.Candidate.UnderlyingSymbol, MethodSymbol)
+            ' Stubs for ByRef returning methods are not supported.
+            ' We could easily support a stub for the case when return value is dropped,
+            ' but enabling other kinds of stubs later can lead to breaking changes
+            ' because those relaxations could be "better".
+            If Not ignoreMethodReturnType AndAlso targetMethodSymbol.ReturnsByRef AndAlso
+               Conversions.IsDelegateRelaxationSupportedFor(methodConversions) AndAlso
+               Conversions.IsStubRequiredForMethodConversion(methodConversions) Then
+                methodConversions = methodConversions Or MethodConversionKind.Error_StubNotSupported
+            End If
 
             If Conversions.IsDelegateRelaxationSupportedFor(methodConversions) Then
                 Dim typeArgumentInferenceDiagnosticsOpt = analysisResult.TypeArgumentInferenceDiagnosticsOpt

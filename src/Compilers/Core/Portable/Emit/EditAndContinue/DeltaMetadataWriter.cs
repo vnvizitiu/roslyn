@@ -9,6 +9,7 @@ using System.Reflection.Metadata;
 using System.Reflection.Metadata.Ecma335;
 using System.Threading;
 using Microsoft.Cci;
+using Microsoft.CodeAnalysis.PooledObjects;
 using Microsoft.CodeAnalysis;
 using Roslyn.Utilities;
 
@@ -50,11 +51,20 @@ namespace Microsoft.CodeAnalysis.Emit
             DefinitionMap definitionMap,
             SymbolChanges changes,
             CancellationToken cancellationToken)
-            : base(MakeTablesBuilder(previousGeneration), null, null, context, messageProvider, false, false, cancellationToken)
+            : base(metadata: MakeTablesBuilder(previousGeneration),
+                   debugMetadataOpt: (context.Module.DebugInformationFormat == DebugInformationFormat.PortablePdb) ? new MetadataBuilder() : null,
+                   dynamicAnalysisDataWriterOpt: null,
+                   context: context,
+                   messageProvider: messageProvider,
+                   metadataOnly: false,
+                   deterministic: false,
+                   emitTestCoverageData: false,
+                   cancellationToken: cancellationToken)
         {
             Debug.Assert(previousGeneration != null);
             Debug.Assert(encId != default(Guid));
             Debug.Assert(encId != previousGeneration.EncId);
+            Debug.Assert(context.Module.DebugInformationFormat != DebugInformationFormat.Embedded);
 
             _previousGeneration = previousGeneration;
             _encId = encId;
@@ -208,9 +218,9 @@ namespace Microsoft.CodeAnalysis.Emit
             foreach (var def in _methodDefs.GetRows())
             {
                 // The debugger tries to remap all modified methods, which requires presence of sequence points.
-                if (!_methodDefs.IsAddedNotChanged(def) && (def.GetBody(this.Context)?.HasAnySequencePoints ?? false))
+                if (!_methodDefs.IsAddedNotChanged(def) && def.GetBody(Context)?.SequencePoints.Length > 0)
                 {
-                    methods.Add(MetadataTokens.MethodDefinitionHandle((int)_methodDefs[def]));
+                    methods.Add(MetadataTokens.MethodDefinitionHandle(_methodDefs[def]));
                 }
             }
         }
@@ -478,7 +488,7 @@ namespace Microsoft.CodeAnalysis.Emit
             var ok = _typeDefs.TryGetValue(typeDef, out typeIndex);
             Debug.Assert(ok);
 
-            foreach (var eventDef in typeDef.Events)
+            foreach (var eventDef in typeDef.GetEvents(this.Context))
             {
                 int eventMapIndex;
                 if (!_eventMap.TryGetValue(typeIndex, out eventMapIndex))
@@ -881,6 +891,25 @@ namespace Microsoft.CodeAnalysis.Emit
             }
 
             tokens.Free();
+
+            // Populate Portable PDB EncMap table with MethodDebugInformation mapping,
+            // which corresponds 1:1 to MethodDef mapping.
+            if (_debugMetadataOpt != null)
+            {
+                var debugTokens = ArrayBuilder<EntityHandle>.GetInstance();
+                AddDefinitionTokens(debugTokens, _methodDefs, TableIndex.MethodDebugInformation);
+                debugTokens.Sort(HandleComparer.Default);
+
+                // Should not be any duplicates.
+                Debug.Assert(debugTokens.Distinct().Count() == debugTokens.Count);
+
+                foreach (var token in debugTokens)
+                {
+                    _debugMetadataOpt.AddEncMapEntry(token);
+                }
+
+                debugTokens.Free();
+            }
 
 #if DEBUG
             // The following tables are either represented in the EncMap

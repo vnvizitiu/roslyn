@@ -1,26 +1,20 @@
-// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+﻿// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
 using System;
 using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.Linq;
-using System.Text;
 using System.Threading.Tasks;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CodeGeneration;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.CodeStyle;
-using Microsoft.CodeAnalysis.CSharp.Symbols;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
-using Microsoft.CodeAnalysis.Editing;
-using Microsoft.CodeAnalysis.Editor.UnitTests.Workspaces;
 using Microsoft.CodeAnalysis.Options;
-using Microsoft.CodeAnalysis.Text;
 using Roslyn.Test.Utilities;
 using Roslyn.Utilities;
 using Xunit;
-using Microsoft.CodeAnalysis.CodeStyle;
 using CS = Microsoft.CodeAnalysis.CSharp;
-using VB = Microsoft.CodeAnalysis.VisualBasic;
 
 namespace Microsoft.CodeAnalysis.Editor.UnitTests.CodeGeneration
 {
@@ -54,7 +48,7 @@ namespace Microsoft.CodeAnalysis.Editor.UnitTests.CodeGeneration
                 await TestAddFieldAsync(input, expected,
                     type: GetTypeSymbol(typeof(string)),
                     accessibility: Accessibility.Private,
-                    modifiers: new DeclarationModifiers(isStatic: true));
+                    modifiers: new Editing.DeclarationModifiers(isStatic: true));
             }
 
             [Fact, Trait(Traits.Feature, Traits.Features.CodeGeneration)]
@@ -72,7 +66,7 @@ namespace Microsoft.CodeAnalysis.Editor.UnitTests.CodeGeneration
                 var input = "class [|C|] { }";
                 var expected = "class C { public unsafe int F; }";
                 await TestAddFieldAsync(input, expected,
-                    modifiers: new DeclarationModifiers(isUnsafe: true),
+                    modifiers: new Editing.DeclarationModifiers(isUnsafe: true),
                     type: GetTypeSymbol(typeof(int)));
             }
 
@@ -117,7 +111,7 @@ namespace Microsoft.CodeAnalysis.Editor.UnitTests.CodeGeneration
                 var input = "class [|C|] { public C(int i) { } }";
                 var expected = "class C { public C() : this(42) { } public C(int i) { } }";
                 await TestAddConstructorAsync(input, expected,
-                    thisArguments: new[] { CS.SyntaxFactory.ParseExpression("42") });
+                    thisArguments: ImmutableArray.Create<SyntaxNode>(CS.SyntaxFactory.ParseExpression("42")));
             }
 
             [Fact, Trait(Traits.Feature, Traits.Features.CodeGeneration)]
@@ -126,7 +120,7 @@ namespace Microsoft.CodeAnalysis.Editor.UnitTests.CodeGeneration
                 var input = "class [|C|] { }";
                 var expected = "class C { static C() { } }";
                 await TestAddConstructorAsync(input, expected,
-                    modifiers: new DeclarationModifiers(isStatic: true));
+                    modifiers: new Editing.DeclarationModifiers(isStatic: true));
             }
 
             [Fact, Trait(Traits.Feature, Traits.Features.CodeGeneration), WorkItem(544082, "http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/544082")]
@@ -140,7 +134,7 @@ namespace Microsoft.CodeAnalysis.Editor.UnitTests.CodeGeneration
     }
 }";
                 await TestAddNamedTypeAsync(input, expected,
-                    compareTokens: false);
+                    ignoreTrivia: false);
             }
 
             [Fact, Trait(Traits.Feature, Traits.Features.CodeGeneration)]
@@ -167,7 +161,7 @@ namespace Microsoft.CodeAnalysis.Editor.UnitTests.CodeGeneration
                 var input = "namespace [|N|] { }";
                 var expected = "namespace N { public static class C { } }";
                 await TestAddNamedTypeAsync(input, expected,
-                    modifiers: new DeclarationModifiers(isStatic: true));
+                    modifiers: new Editing.DeclarationModifiers(isStatic: true));
             }
 
             [Fact, Trait(Traits.Feature, Traits.Features.CodeGeneration), WorkItem(544405, "http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/544405")]
@@ -177,7 +171,7 @@ namespace Microsoft.CodeAnalysis.Editor.UnitTests.CodeGeneration
                 var expected = "namespace N { private sealed class C { } }";
                 await TestAddNamedTypeAsync(input, expected,
                     accessibility: Accessibility.Private,
-                    modifiers: new DeclarationModifiers(isSealed: true));
+                    modifiers: new Editing.DeclarationModifiers(isSealed: true));
             }
 
             [Fact, Trait(Traits.Feature, Traits.Features.CodeGeneration), WorkItem(544405, "http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/544405")]
@@ -187,7 +181,7 @@ namespace Microsoft.CodeAnalysis.Editor.UnitTests.CodeGeneration
                 var expected = "namespace N { protected internal abstract class C { } }";
                 await TestAddNamedTypeAsync(input, expected,
                     accessibility: Accessibility.ProtectedOrInternal,
-                    modifiers: new DeclarationModifiers(isAbstract: true));
+                    modifiers: new Editing.DeclarationModifiers(isAbstract: true));
             }
 
             [Fact, Trait(Traits.Feature, Traits.Features.CodeGeneration)]
@@ -208,7 +202,7 @@ namespace Microsoft.CodeAnalysis.Editor.UnitTests.CodeGeneration
                 var expected = "namespace N { public struct S { } }";
                 await TestAddNamedTypeAsync(input, expected,
                     name: "S",
-                    modifiers: new DeclarationModifiers(isSealed: true),
+                    modifiers: new Editing.DeclarationModifiers(isSealed: true),
                     accessibility: Accessibility.Public,
                     typeKind: TypeKind.Struct);
             }
@@ -260,7 +254,7 @@ namespace Microsoft.CodeAnalysis.Editor.UnitTests.CodeGeneration
                 await TestAddDelegateTypeAsync(input, expected,
                     returnType: typeof(int),
                     parameters: Parameters(Parameter(typeof(string), "s")),
-                    modifiers: new DeclarationModifiers(isSealed: true));
+                    modifiers: new Editing.DeclarationModifiers(isSealed: true));
             }
 
             [Fact, Trait(Traits.Feature, Traits.Features.CodeGeneration)]
@@ -278,7 +272,7 @@ namespace Microsoft.CodeAnalysis.Editor.UnitTests.CodeGeneration
                 var input = "class [|C|] { }";
                 var expected = "class C { public unsafe event System.Action E; }";
                 await TestAddEventAsync(input, expected,
-                    modifiers: new DeclarationModifiers(isUnsafe: true),
+                    modifiers: new Editing.DeclarationModifiers(isUnsafe: true),
                     codeGenerationOptions: new CodeGenerationOptions(addImports: false));
             }
 
@@ -288,8 +282,8 @@ namespace Microsoft.CodeAnalysis.Editor.UnitTests.CodeGeneration
                 var input = "class [|C|] { }";
                 var expected = "class C { public event System.Action E { add { } remove { } } }";
                 await TestAddEventAsync(input, expected,
-                    addMethod: CodeGenerationSymbolFactory.CreateAccessorSymbol(SpecializedCollections.EmptyList<AttributeData>(), Accessibility.NotApplicable, SpecializedCollections.EmptyList<SyntaxNode>()),
-                    removeMethod: CodeGenerationSymbolFactory.CreateAccessorSymbol(SpecializedCollections.EmptyList<AttributeData>(), Accessibility.NotApplicable, SpecializedCollections.EmptyList<SyntaxNode>()),
+                    addMethod: CodeGenerationSymbolFactory.CreateAccessorSymbol(ImmutableArray<AttributeData>.Empty, Accessibility.NotApplicable, ImmutableArray<SyntaxNode>.Empty),
+                    removeMethod: CodeGenerationSymbolFactory.CreateAccessorSymbol(ImmutableArray<AttributeData>.Empty, Accessibility.NotApplicable, ImmutableArray<SyntaxNode>.Empty),
                     codeGenerationOptions: new CodeGenerationOptions(addImports: false));
             }
 
@@ -318,7 +312,7 @@ namespace Microsoft.CodeAnalysis.Editor.UnitTests.CodeGeneration
                 var input = "struct [|S|] { }";
                 var expected = "struct S { public static int M() { $$ } }";
                 await TestAddMethodAsync(input, expected,
-                    modifiers: new DeclarationModifiers(isStatic: true),
+                    modifiers: new Editing.DeclarationModifiers(isStatic: true),
                     returnType: typeof(int),
                     statements: "return 0;");
             }
@@ -330,7 +324,7 @@ namespace Microsoft.CodeAnalysis.Editor.UnitTests.CodeGeneration
                 var expected = "class C { public sealed override int GetHashCode() { $$ } }";
                 await TestAddMethodAsync(input, expected,
                     name: "GetHashCode",
-                    modifiers: new DeclarationModifiers(isOverride: true, isSealed: true),
+                    modifiers: new Editing.DeclarationModifiers(isOverride: true, isSealed: true),
                     returnType: typeof(int),
                     statements: "return 0;");
             }
@@ -341,7 +335,7 @@ namespace Microsoft.CodeAnalysis.Editor.UnitTests.CodeGeneration
                 var input = "abstract class [|C|] { }";
                 var expected = "abstract class C { public abstract int M(); }";
                 await TestAddMethodAsync(input, expected,
-                    modifiers: new DeclarationModifiers(isAbstract: true),
+                    modifiers: new Editing.DeclarationModifiers(isAbstract: true),
                     returnType: typeof(int));
             }
 
@@ -362,7 +356,7 @@ namespace Microsoft.CodeAnalysis.Editor.UnitTests.CodeGeneration
                 var expected = "class C { public int M<T>() { $$ } }";
                 await TestAddMethodAsync(input, expected,
                     returnType: typeof(int),
-                    typeParameters: new[] { CodeGenerationSymbolFactory.CreateTypeParameterSymbol("T") },
+                    typeParameters: ImmutableArray.Create(CodeGenerationSymbolFactory.CreateTypeParameterSymbol("T")),
                     statements: "return new T().GetHashCode();");
             }
 
@@ -373,7 +367,7 @@ namespace Microsoft.CodeAnalysis.Editor.UnitTests.CodeGeneration
                 var expected = "class C { protected virtual int M() { $$ } }";
                 await TestAddMethodAsync(input, expected,
                     accessibility: Accessibility.Protected,
-                    modifiers: new DeclarationModifiers(isVirtual: true),
+                    modifiers: new Editing.DeclarationModifiers(isVirtual: true),
                     returnType: typeof(int),
                     statements: "return 0;");
             }
@@ -385,7 +379,7 @@ namespace Microsoft.CodeAnalysis.Editor.UnitTests.CodeGeneration
                 var expected = "class C { public unsafe new string ToString() { $$ } }";
                 await TestAddMethodAsync(input, expected,
                     name: "ToString",
-                    modifiers: new DeclarationModifiers(isNew: true, isUnsafe: true),
+                    modifiers: new Editing.DeclarationModifiers(isNew: true, isUnsafe: true),
                     returnType: typeof(string),
                     statements: "return String.Empty;");
             }
@@ -399,8 +393,8 @@ namespace Microsoft.CodeAnalysis.Editor.UnitTests.CodeGeneration
                     name: "M",
                     returnType: typeof(void),
                     parameters: Parameters(Parameter(typeof(int), "i")),
-                    modifiers: new DeclarationModifiers(isUnsafe: true),
-                    explicitInterface: s => s.LookupSymbols(input.IndexOf('M'), null, "M").First() as IMethodSymbol);
+                    modifiers: new Editing.DeclarationModifiers(isUnsafe: true),
+                    getExplicitInterfaces: s => s.LookupSymbols(input.IndexOf('M'), null, "M").OfType<IMethodSymbol>().ToImmutableArray());
             }
 
             [Fact, Trait(Traits.Feature, Traits.Features.CodeGeneration)]
@@ -412,7 +406,7 @@ namespace Microsoft.CodeAnalysis.Editor.UnitTests.CodeGeneration
                     name: "M",
                     returnType: typeof(void),
                     parameters: Parameters(Parameter(typeof(int), "i")),
-                    explicitInterface: s => s.LookupSymbols(input.IndexOf('M'), null, "M").First() as IMethodSymbol);
+                    getExplicitInterfaces: s => s.LookupSymbols(input.IndexOf('M'), null, "M").OfType<IMethodSymbol>().ToImmutableArray());
             }
 
             [Fact, Trait(Traits.Feature, Traits.Features.CodeGeneration)]
@@ -596,7 +590,7 @@ class C
             public async Task AddDefaultParameterWithDefaultValueToMethod()
             {
                 var input = "class C { public void [|M|]() { } }";
-                var expected = "class C { public void M(double number = default(double)) { } }";
+                var expected = "class C { public void M(double number = 0) { } }";
                 await TestAddParametersAsync(input, expected,
                     Parameters(Parameter(typeof(double), "number", true)));
             }
@@ -637,7 +631,7 @@ class C
                 var expected = "class C { public unsafe int P { get; internal set; } }";
                 await TestAddPropertyAsync(input, expected,
                     type: typeof(int),
-                    modifiers: new DeclarationModifiers(isUnsafe: true),
+                    modifiers: new Editing.DeclarationModifiers(isUnsafe: true),
                     setterAccessibility: Accessibility.Internal);
             }
 
@@ -665,8 +659,8 @@ class C
                     getStatements: "return String.Empty;",
                     isIndexer: true,
                     options: new Dictionary<OptionKey, object> {
-                        { CSharpCodeStyleOptions.PreferExpressionBodiedAccessors, CodeStyleOptions.FalseWithNoneEnforcement },
-                        { CSharpCodeStyleOptions.PreferExpressionBodiedIndexers, CodeStyleOptions.FalseWithNoneEnforcement },
+                        { CSharpCodeStyleOptions.PreferExpressionBodiedAccessors, CSharpCodeStyleOptions.NeverWithNoneEnforcement },
+                        { CSharpCodeStyleOptions.PreferExpressionBodiedIndexers, CSharpCodeStyleOptions.NeverWithNoneEnforcement },
                     });
             }
 
@@ -960,7 +954,7 @@ class C { }";
 }";
                 var eol = SyntaxFactory.EndOfLine(@"");
                 var newModifiers = new[] { SyntaxFactory.Token(SyntaxKind.InternalKeyword).WithLeadingTrivia(eol) }.Concat(
-                    CreateModifierTokens(new DeclarationModifiers(isSealed: true, isPartial: true), LanguageNames.CSharp));
+                    CreateModifierTokens(new Editing.DeclarationModifiers(isSealed: true, isPartial: true), LanguageNames.CSharp));
 
                 await TestUpdateDeclarationAsync<ClassDeclarationSyntax>(input, expected, modifiers: newModifiers);
             }
@@ -1018,10 +1012,10 @@ public static class C
     public int f;
     public int f2;
 }";
-                var getField = CreateField(Accessibility.Public, new DeclarationModifiers(), typeof(int), "f2");
-                var getMembers = new List<Func<SemanticModel, ISymbol>>();
-                getMembers.Add(getField);
-                await TestUpdateDeclarationAsync<ClassDeclarationSyntax>(input, expected, getNewMembers: getMembers);
+                var getField = CreateField(Accessibility.Public, new Editing.DeclarationModifiers(), typeof(int), "f2");
+                var getMembers = ImmutableArray.Create(getField);
+                await TestUpdateDeclarationAsync<ClassDeclarationSyntax>(
+                    input, expected, getNewMembers: getMembers);
             }
 
             [Fact, Trait(Traits.Feature, Traits.Features.CodeGeneration)]
@@ -1044,9 +1038,8 @@ public static class C
     // Comment 1
     public static char F() { return 0; }
 }";
-                var getField = CreateField(Accessibility.Public, new DeclarationModifiers(), typeof(int), "f2");
-                var getMembers = new List<Func<SemanticModel, ISymbol>>();
-                getMembers.Add(getField);
+                var getField = CreateField(Accessibility.Public, new Editing.DeclarationModifiers(), typeof(int), "f2");
+                var getMembers = ImmutableArray.Create(getField);
                 await TestUpdateDeclarationAsync<ClassDeclarationSyntax>(input, expected, getNewMembers: getMembers, declareNewMembersAtTop: true);
             }
 

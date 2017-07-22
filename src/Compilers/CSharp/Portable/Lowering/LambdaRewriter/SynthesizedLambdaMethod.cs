@@ -3,6 +3,7 @@
 using System.Collections.Immutable;
 using Microsoft.CodeAnalysis.CodeGen;
 using Microsoft.CodeAnalysis.CSharp.Symbols;
+using Microsoft.CodeAnalysis.PooledObjects;
 using System.Diagnostics;
 using Roslyn.Utilities;
 
@@ -58,7 +59,7 @@ namespace Microsoft.CodeAnalysis.CSharp
                     typeMap = TypeMap.Empty.WithConcatAlphaRename(lambdaNode.Symbol, this, out typeParameters, out constructedFromTypeParameters, null);
                     break;
                 default:
-                    throw ExceptionUtilities.Unreachable;
+                    throw ExceptionUtilities.UnexpectedValue(closureKind);
             }
 
             if (!structClosures.IsDefaultOrEmpty && typeParameters.Length != 0)

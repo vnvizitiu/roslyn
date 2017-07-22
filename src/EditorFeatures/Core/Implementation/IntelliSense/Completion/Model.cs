@@ -15,14 +15,19 @@ namespace Microsoft.CodeAnalysis.Editor.Implementation.IntelliSense.Completion
     internal class Model
     {
         private readonly DisconnectedBufferGraph _disconnectedBufferGraph;
-        public ITextSnapshot TriggerSnapshot { get { return _disconnectedBufferGraph.SubjectBufferSnapshot; } }
+        public ITextSnapshot TriggerSnapshot => _disconnectedBufferGraph.SubjectBufferSnapshot;
 
         public Document TriggerDocument { get; }
 
         public CompletionList OriginalList { get; }
         public ImmutableArray<CompletionItem> FilteredItems { get; }
 
-        public CompletionItem SelectedItem { get; }
+        /// <summary>
+        /// The currently selected item. Note that this can be null
+        /// in VS 15+ if the user uses completion list filters to
+        /// hide all the items in the list.
+        /// </summary>
+        public CompletionItem SelectedItemOpt { get; }
 
         public ImmutableArray<CompletionItemFilter> CompletionItemFilters { get; }
         public ImmutableDictionary<CompletionItemFilter, bool> FilterState { get; }
@@ -65,14 +70,13 @@ namespace Microsoft.CodeAnalysis.Editor.Implementation.IntelliSense.Completion
             bool dismissIfEmpty)
         {
             Contract.ThrowIfFalse(originalList.Items.Length != 0, "Must have at least one item.");
-            Contract.ThrowIfNull(selectedItem);
 
             this.TriggerDocument = triggerDocument;
             _disconnectedBufferGraph = disconnectedBufferGraph;
             this.OriginalList = originalList;
             this.FilteredItems = filteredItems;
             this.FilterState = filterState;
-            this.SelectedItem = selectedItem;
+            this.SelectedItemOpt = selectedItem;
             this.CompletionItemFilters = completionItemFilters;
             this.FilterText = filterText;
             this.IsHardSelection = isHardSelection;
@@ -160,18 +164,18 @@ namespace Microsoft.CodeAnalysis.Editor.Implementation.IntelliSense.Completion
         }
 
         private Model With(
-            Optional<ImmutableArray<CompletionItem>> filteredItems = default(Optional<ImmutableArray<CompletionItem>>),
-            Optional<CompletionItem> selectedItem = default(Optional<CompletionItem>),
-            Optional<ImmutableDictionary<CompletionItemFilter, bool>> filterState = default(Optional<ImmutableDictionary<CompletionItemFilter, bool>>),
-            Optional<string> filterText = default(Optional<string>),
-            Optional<bool> isHardSelection = default(Optional<bool>),
-            Optional<bool> isUnique = default(Optional<bool>),
-            Optional<bool> useSuggestionMode = default(Optional<bool>),
-            Optional<CompletionItem> suggestionModeItem = default(Optional<CompletionItem>),
-            Optional<ITrackingPoint> commitTrackingSpanEndPoint = default(Optional<ITrackingPoint>))
+            Optional<ImmutableArray<CompletionItem>> filteredItems = default,
+            Optional<CompletionItem> selectedItem = default,
+            Optional<ImmutableDictionary<CompletionItemFilter, bool>> filterState = default,
+            Optional<string> filterText = default,
+            Optional<bool> isHardSelection = default,
+            Optional<bool> isUnique = default,
+            Optional<bool> useSuggestionMode = default,
+            Optional<CompletionItem> suggestionModeItem = default,
+            Optional<ITrackingPoint> commitTrackingSpanEndPoint = default)
         {
             var newFilteredItems = filteredItems.HasValue ? filteredItems.Value : FilteredItems;
-            var newSelectedItem = selectedItem.HasValue ? selectedItem.Value : SelectedItem;
+            var newSelectedItem = selectedItem.HasValue ? selectedItem.Value : SelectedItemOpt;
             var newFilterState = filterState.HasValue ? filterState.Value : FilterState;
             var newFilterText = filterText.HasValue ? filterText.Value : FilterText;
             var newIsHardSelection = isHardSelection.HasValue ? isHardSelection.Value : IsHardSelection;
@@ -181,7 +185,7 @@ namespace Microsoft.CodeAnalysis.Editor.Implementation.IntelliSense.Completion
             var newCommitTrackingSpanEndPoint = commitTrackingSpanEndPoint.HasValue ? commitTrackingSpanEndPoint.Value : CommitTrackingSpanEndPoint;
 
             if (newFilteredItems == FilteredItems &&
-                newSelectedItem == SelectedItem &&
+                newSelectedItem == SelectedItemOpt &&
                 newFilterState == FilterState &&
                 newFilterText == FilterText &&
                 newIsHardSelection == IsHardSelection &&
@@ -276,8 +280,7 @@ namespace Microsoft.CodeAnalysis.Editor.Implementation.IntelliSense.Completion
             Dictionary<TextSpan, string> textSpanToTextCache,
             int? endPoint = null)
         {
-            string currentSnapshotText;
-            if (!textSpanToTextCache.TryGetValue(originalSpan, out currentSnapshotText))
+            if (!textSpanToTextCache.TryGetValue(originalSpan, out var currentSnapshotText))
             {
                 var viewSpan = GetViewBufferSpan(originalSpan);
                 currentSnapshotText = GetCurrentTextInSnapshot(viewSpan, textSnapshot, endPoint);

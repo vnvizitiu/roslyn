@@ -1,4 +1,4 @@
-// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+﻿// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
 using System;
 using System.Composition;
@@ -61,21 +61,9 @@ namespace Microsoft.CodeAnalysis.CSharp.CodeFixes.Suppression
             return triviaList;
         }
 
-        protected override string DefaultFileExtension
-        {
-            get
-            {
-                return ".cs";
-            }
-        }
+        protected override string DefaultFileExtension => ".cs";
 
-        protected override string SingleLineCommentStart
-        {
-            get
-            {
-                return "//";
-            }
-        }
+        protected override string SingleLineCommentStart => "//";
 
         protected override bool IsAttributeListWithAssemblyAttributes(SyntaxNode node)
         {

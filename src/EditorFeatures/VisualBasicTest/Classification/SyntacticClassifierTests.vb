@@ -1,24 +1,26 @@
-' Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+﻿' Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
+Imports System.Collections.Immutable
 Imports System.Threading
 Imports Microsoft.CodeAnalysis.Classification
 Imports Microsoft.CodeAnalysis.Editor.UnitTests.Workspaces
+Imports Microsoft.CodeAnalysis.PooledObjects
 Imports Microsoft.CodeAnalysis.Text
 
 Namespace Microsoft.CodeAnalysis.Editor.VisualBasic.UnitTests.Classification
     Public Class SyntacticClassifierTests
         Inherits AbstractVisualBasicClassifierTests
 
-        Friend Overrides Async Function GetClassificationSpansAsync(code As String, textSpan As TextSpan) As Tasks.Task(Of IEnumerable(Of ClassifiedSpan))
-            Using Workspace = Await TestWorkspace.CreateVisualBasicAsync(code)
+        Friend Overrides Async Function GetClassificationSpansAsync(code As String, textSpan As TextSpan) As Task(Of ImmutableArray(Of ClassifiedSpan))
+            Using Workspace = TestWorkspace.CreateVisualBasic(code)
                 Dim document = Workspace.CurrentSolution.Projects.First().Documents.First()
                 Dim tree = Await document.GetSyntaxTreeAsync()
 
-                Dim service = document.GetLanguageService(Of IClassificationService)()
-                Dim result = New List(Of ClassifiedSpan)
+                Dim service = document.GetLanguageService(Of ISyntaxClassificationService)()
+                Dim result = ArrayBuilder(Of ClassifiedSpan).GetInstance
                 service.AddSyntacticClassifications(tree, textSpan, result, CancellationToken.None)
 
-                Return result
+                Return result.ToImmutableAndFree()
             End Using
         End Function
 
@@ -3856,6 +3858,33 @@ Namespace Microsoft.CodeAnalysis.Editor.VisualBasic.UnitTests.Classification
 End Region ' Stuff",
 TextSpan.FromBounds(28, 36),
 Comment("' Stuff"))
+        End Function
+
+        <Fact, Trait(Traits.Feature, Traits.Features.Classification)>
+        Public Async Function TestConflictMarkers1() As Task
+            Await TestAsync(
+"interface I
+<<<<<<< Start
+    sub Foo()
+=======
+    sub Bar()
+>>>>>>> End
+end interface",
+                Keyword("interface"),
+                [Interface]("I"),
+                Comment("<<<<<<< Start"),
+                Keyword("sub"),
+                Identifier("Foo"),
+                Punctuation.OpenParen,
+                Punctuation.CloseParen,
+                Comment("======="),
+                Keyword("sub"),
+                Identifier("Bar"),
+                Punctuation.OpenParen,
+                Punctuation.CloseParen,
+                Comment(">>>>>>> End"),
+                Keyword("end"),
+                Keyword("interface"))
         End Function
     End Class
 End Namespace

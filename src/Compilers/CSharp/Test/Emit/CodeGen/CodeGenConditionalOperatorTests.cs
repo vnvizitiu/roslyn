@@ -103,6 +103,31 @@ class C : I
 ");
         }
 
+        [Fact, WorkItem(20266, "https://github.com/dotnet/roslyn/issues/20266")]
+        public void ConditionalAccessInMethodGroupConversion()
+        {
+            var source = @"
+class C
+{
+    void M(object o)
+    {
+        System.Func<int, string> filter = new C(o?.ToString()).Method;
+        filter(0);
+    }
+    string Method(int x)
+    {
+        throw null;
+    }
+    C(string x)
+    {
+    }
+}
+";
+            var comp = CreateStandardCompilation(source);
+            comp.VerifyDiagnostics();
+            CompileAndVerify(comp);
+        }
+
         [Fact, WorkItem(638289, "http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/638289")]
         public void ConditionalDelegateInterfaceUnification2()
         {
@@ -2326,5 +2351,125 @@ static class LiveList
 
             CompileAndVerify(source);
         }
+
+        [Fact, WorkItem(17756, "https://github.com/dotnet/roslyn/issues/17756")]
+        public void TestConditionalOperatorNotLvalue()
+        {
+            var source = @"
+    class Program
+    {
+
+        interface IIncrementable
+        {
+            int Increment();
+        }
+
+        struct S1: IIncrementable
+        {
+            public int field;
+            public int Increment() => field++;
+        }
+
+        static void Main()
+        {
+            S1 v = default(S1);
+            v.Increment();
+
+            (true ? v : default(S1)).Increment();
+
+            System.Console.WriteLine(v.field);
+
+            System.Console.WriteLine((false ? default(S1): v).Increment());
+
+            System.Console.WriteLine(v.field);
+
+            Test(ref v);
+            System.Console.WriteLine(v.field);
+        }
+
+        static void Test<T>(ref T arg) where T:IIncrementable
+        {
+            (true ? arg : default(T)).Increment();
+        }
+    }
+";
+            string expectedOutput = @"1
+1
+1
+1";
+            CompileAndVerify(source, expectedOutput: expectedOutput);
+        }
+
+        [Fact, WorkItem(17756, "https://github.com/dotnet/roslyn/issues/17756")]
+        public void TestConditionalOperatorNotLvaluePointerElementAccess()
+        {
+            var source = @"
+class Program
+{
+
+    struct S1 
+    {
+        public int field;
+        public int Increment() => field++;
+
+    }
+
+    unsafe static void Main()
+    {
+        S1 v = default(S1);
+        v.Increment();
+
+        System.Console.WriteLine(v.field);
+
+        S1* pv = &v;
+
+        (true ? pv[0] : default(S1)).Increment();
+
+        System.Console.WriteLine(v.field);
+    }
+}
+";
+            string expectedOutput = @"1
+1";
+            CompileAndVerify(source, expectedOutput: expectedOutput, options: TestOptions.UnsafeReleaseExe);
+        }
+
+        [Fact, WorkItem(17756, "https://github.com/dotnet/roslyn/issues/17756")]
+        public void TestConditionalOperatorNotLvalueRefCall()
+        {
+            var source = @"
+class Program
+{
+
+    struct S1 
+    {
+        public int field;
+        public int Increment() => field++;
+    }
+
+    private static S1 sv;
+
+    private static ref S1 M1()
+    {
+        return ref sv;
+    }
+
+    static void Main()
+    {
+        sv.Increment();
+
+        System.Console.WriteLine(sv.field);
+
+        (true ? M1() : default(S1)).Increment();
+
+        System.Console.WriteLine(sv.field);
+    }
+}
+";
+            string expectedOutput = @"1
+1";
+            CompileAndVerify(source, expectedOutput: expectedOutput);
+        }
+
     }
 }

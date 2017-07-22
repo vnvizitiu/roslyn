@@ -1,4 +1,4 @@
-// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+﻿// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
 using System;
 using System.Diagnostics;
@@ -279,17 +279,17 @@ namespace Microsoft.VisualStudio.LanguageServices.Implementation.Library.ObjectB
             AddIndent();
             AddText(left);
 
-            if (containingSymbol is IAssemblySymbol)
+            if (containingSymbol is IAssemblySymbol assemblySymbol)
             {
-                AddAssemblyLink((IAssemblySymbol)containingSymbol);
+                AddAssemblyLink(assemblySymbol);
             }
-            else if (containingSymbol is ITypeSymbol)
+            else if (containingSymbol is ITypeSymbol typeSymbol)
             {
-                AddTypeLink((ITypeSymbol)containingSymbol, LinkFlags.SplitNamespaceAndType | LinkFlags.ExpandPredefinedTypes);
+                AddTypeLink(typeSymbol, LinkFlags.SplitNamespaceAndType | LinkFlags.ExpandPredefinedTypes);
             }
-            else if (containingSymbol is INamespaceSymbol)
+            else if (containingSymbol is INamespaceSymbol namespaceSymbol)
             {
-                AddNamespaceLink((INamespaceSymbol)containingSymbol);
+                AddNamespaceLink(namespaceSymbol);
             }
 
             AddText(right);

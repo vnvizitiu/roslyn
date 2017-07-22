@@ -1,4 +1,4 @@
-// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+﻿// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
 using System;
 using System.Collections.Generic;
@@ -124,13 +124,13 @@ namespace Microsoft.CodeAnalysis.Editor.CSharp.UnitTests.SymbolId
             foreach (var node in symbol.DeclaringSyntaxReferences.Select(d => d.GetSyntax()))
             {
                 BlockSyntax body = null;
-                if (node is BaseMethodDeclarationSyntax)
+                if (node is BaseMethodDeclarationSyntax baseMethod)
                 {
-                    body = (node as BaseMethodDeclarationSyntax).Body;
+                    body = baseMethod.Body;
                 }
-                else if (node is AccessorDeclarationSyntax)
+                else if (node is AccessorDeclarationSyntax accessor)
                 {
-                    body = (node as AccessorDeclarationSyntax).Body;
+                    body = accessor.Body;
                 }
 
                 if (body != null || body.Statements.Any())
@@ -300,13 +300,13 @@ namespace Microsoft.CodeAnalysis.Editor.CSharp.UnitTests.SymbolId
                 foreach (var node in symbol.DeclaringSyntaxReferences.Select(d => d.GetSyntax()))
                 {
                     BlockSyntax body = null;
-                    if (node is BaseMethodDeclarationSyntax)
+                    if (node is BaseMethodDeclarationSyntax baseMethod)
                     {
-                        body = (node as BaseMethodDeclarationSyntax).Body;
+                        body = baseMethod.Body;
                     }
-                    else if (node is AccessorDeclarationSyntax)
+                    else if (node is AccessorDeclarationSyntax accessor)
                     {
-                        body = (node as AccessorDeclarationSyntax).Body;
+                        body = accessor.Body;
                     }
 
                     var model = _compilation.GetSemanticModel(node.SyntaxTree);

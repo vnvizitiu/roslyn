@@ -165,9 +165,6 @@ namespace Microsoft.VisualStudio.LanguageServices.Implementation
                 case VSConstants.VSStd2KCmdID.PARAMINFO:
                     return QueryParameterInfoStatus(prgCmds);
 
-                case VSConstants.VSStd2KCmdID.QUICKINFO:
-                    return QueryQuickInfoStatus(prgCmds);
-
                 case VSConstants.VSStd2KCmdID.RENAME:
                     return QueryRenameStatus(ref pguidCmdGroup, commandCount, prgCmds, commandText);
 
@@ -322,8 +319,7 @@ namespace Microsoft.VisualStudio.LanguageServices.Implementation
 
             if (textBuffer != null)
             {
-                Workspace workspace;
-                if (Workspace.TryGetWorkspace(textBuffer.AsTextContainer(), out workspace))
+                if (Workspace.TryGetWorkspace(textBuffer.AsTextContainer(), out var workspace))
                 {
                     var organizeImportsService = workspace.Services.GetLanguageServices(textBuffer).GetService<IOrganizeImportsService>();
                     if (organizeImportsService != null)
@@ -343,12 +339,6 @@ namespace Microsoft.VisualStudio.LanguageServices.Implementation
             return GetCommandState(
                 (v, b) => new RenameCommandArgs(v, b),
                 ref pguidCmdGroup, commandCount, prgCmds, commandText);
-        }
-
-        private int QueryQuickInfoStatus(OLECMD[] prgCmds)
-        {
-            prgCmds[0].cmdf = (uint)(OLECMDF.OLECMDF_ENABLED | OLECMDF.OLECMDF_SUPPORTED);
-            return VSConstants.S_OK;
         }
 
         private int QueryParameterInfoStatus(OLECMD[] prgCmds)

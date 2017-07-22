@@ -1,4 +1,4 @@
-' Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+﻿' Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
 Imports System.Threading.Tasks
 
@@ -530,6 +530,108 @@ class X
     end sub
 end class
         ]]></Document>
+    </Project>
+</Workspace>
+            Await TestAPIAndFeature(input)
+        End Function
+
+        <WorkItem(16757, "https://github.com/dotnet/roslyn/issues/16757")>
+        <WpfFact, Trait(Traits.Feature, Traits.Features.FindReferences)>
+        <Test.Utilities.CompilerTrait(Test.Utilities.CompilerFeature.LocalFunctions)>
+        Public Async Function TestParameterInLocalFunction1() As Task
+            Dim input =
+<Workspace>
+    <Project Language="C#" CommonReferences="true">
+        <Document>
+        class C
+        {
+            void Main()
+            {
+                void Local(int {|Definition:$$i|})
+                {
+                    Console.WriteLine([|i|]);
+                }
+
+                Local(1);
+            }
+        }
+        </Document>
+    </Project>
+</Workspace>
+            Await TestAPIAndFeature(input)
+        End Function
+
+        <WorkItem(16757, "https://github.com/dotnet/roslyn/issues/16757")>
+        <WpfFact, Trait(Traits.Feature, Traits.Features.FindReferences)>
+        <Test.Utilities.CompilerTrait(Test.Utilities.CompilerFeature.LocalFunctions)>
+        Public Async Function TestParameterInLocalFunction2() As Task
+            Dim input =
+<Workspace>
+    <Project Language="C#" CommonReferences="true">
+        <Document>
+        class C
+        {
+            void Main()
+            {
+                void Local(int {|Definition:$$i|})
+                {
+                }
+
+                Local([|i|]:1);
+            }
+        }
+        </Document>
+    </Project>
+</Workspace>
+            Await TestAPIAndFeature(input)
+        End Function
+
+        <WorkItem(16757, "https://github.com/dotnet/roslyn/issues/16757")>
+        <WpfFact, Trait(Traits.Feature, Traits.Features.FindReferences)>
+        <Test.Utilities.CompilerTrait(Test.Utilities.CompilerFeature.LocalFunctions)>
+        Public Async Function TestParameterInLocalFunction3() As Task
+            Dim input =
+<Workspace>
+    <Project Language="C#" CommonReferences="true">
+        <Document>
+        class C
+        {
+            void Main()
+            {
+                void Local(int {|Definition:i|})
+                {
+                    Console.WriteLine([|$$i|]);
+                }
+
+                Local(1);
+            }
+        }
+        </Document>
+    </Project>
+</Workspace>
+            Await TestAPIAndFeature(input)
+        End Function
+
+        <WorkItem(16757, "https://github.com/dotnet/roslyn/issues/16757")>
+        <WpfFact, Trait(Traits.Feature, Traits.Features.FindReferences)>
+        <Test.Utilities.CompilerTrait(Test.Utilities.CompilerFeature.LocalFunctions)>
+        Public Async Function TestParameterInLocalFunction4() As Task
+            Dim input =
+<Workspace>
+    <Project Language="C#" CommonReferences="true">
+        <Document>
+        class C
+        {
+            void Main()
+            {
+                void Local(int {|Definition:i|})
+                {
+                }
+
+                Local([|$$i|]:1);
+            }
+        }
+        </Document>
     </Project>
 </Workspace>
             Await TestAPIAndFeature(input)

@@ -1,4 +1,4 @@
-// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+﻿// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
 using System.Threading.Tasks;
 using Microsoft.CodeAnalysis.CSharp.Test.Utilities;
@@ -11,10 +11,8 @@ namespace Microsoft.CodeAnalysis.Editor.CSharp.UnitTests.BraceMatching
 {
     public class CSharpBraceMatcherTests : AbstractBraceMatcherTests
     {
-        protected override Task<TestWorkspace> CreateWorkspaceFromCodeAsync(string code, ParseOptions options)
-        {
-            return TestWorkspace.CreateCSharpAsync(code, options);
-        }
+        protected override TestWorkspace CreateWorkspaceFromCode(string code, ParseOptions options)
+            => TestWorkspace.CreateCSharp(code, options);
 
         [Fact, Trait(Traits.Feature, Traits.Features.BraceMatching)]
         public async Task TestEmptyFile()

@@ -1,4 +1,4 @@
-// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+﻿// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
 using System.Threading.Tasks;
 using Microsoft.CodeAnalysis.Text;
@@ -119,6 +119,17 @@ class C
     void M()
     {
         var c = new C { x = 2, y = 3, $$");
+        }
+
+        [WorkItem(16335, "http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/16335")]
+        [Fact, Trait(Traits.Feature, Traits.Features.KeywordRecommending)]
+        public async Task InExpressionBodyAcessor()
+        {
+            await VerifyKeywordAsync(@"
+class B
+{
+    public virtual int T { get => bas$$ }
+}");
         }
     }
 }

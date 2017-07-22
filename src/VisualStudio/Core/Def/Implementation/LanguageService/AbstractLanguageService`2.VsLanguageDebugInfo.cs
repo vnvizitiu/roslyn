@@ -1,4 +1,4 @@
-// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+﻿// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
 using System;
 using System.Linq;
@@ -68,7 +68,7 @@ namespace Microsoft.VisualStudio.LanguageServices.Implementation.LanguageService
             public int GetLocationOfName(string pszName, out string pbstrMkDoc, out VsTextSpan pspanLocation)
             {
                 pbstrMkDoc = null;
-                pspanLocation = default(VsTextSpan);
+                pspanLocation = default;
                 return VSConstants.E_NOTIMPL;
             }
 
@@ -234,11 +234,9 @@ namespace Microsoft.VisualStudio.LanguageServices.Implementation.LanguageService
                 var filePath = _languageService.Workspace.GetFilePath(document.Id);
                 var text = document.GetTextAsync(cancellationToken).WaitAndGetResult(cancellationToken);
                 var span = text.GetVsTextSpanForSpan(breakpoint.TextSpan);
-
                 // If we're inside an Venus code nugget, we need to map the span to the surface buffer.
                 // Otherwise, we'll just use the original span.
-                VsTextSpan mappedSpan;
-                if (!span.TryMapSpanFromSecondaryBufferToPrimaryBuffer(solution.Workspace, document.Id, out mappedSpan))
+                if (!span.TryMapSpanFromSecondaryBufferToPrimaryBuffer(solution.Workspace, document.Id, out var mappedSpan))
                 {
                     mappedSpan = span;
                 }

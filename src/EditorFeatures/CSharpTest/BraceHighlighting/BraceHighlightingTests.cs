@@ -1,4 +1,4 @@
-// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+﻿// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
 using System.Threading.Tasks;
 using Microsoft.CodeAnalysis.CSharp.Test.Utilities;
@@ -11,10 +11,8 @@ namespace Microsoft.CodeAnalysis.Editor.CSharp.UnitTests.BraceHighlighting
 {
     public class BraceHighlightingTests : AbstractBraceHighlightingTests
     {
-        protected override Task<TestWorkspace> CreateWorkspaceAsync(string markup, ParseOptions options)
-        {
-            return TestWorkspace.CreateCSharpAsync(markup, parseOptions: options);
-        }
+        protected override TestWorkspace CreateWorkspace(string markup, ParseOptions options)
+            => TestWorkspace.CreateCSharp(markup, parseOptions: options);
 
         [WpfFact, Trait(Traits.Feature, Traits.Features.BraceHighlighting)]
         public async Task TestCurlies()

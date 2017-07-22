@@ -181,7 +181,8 @@ namespace My
         private const int global = int.MinValue - 1;
 
         static A() 
-        { 
+        {
+            int x = default;
         }
 
         [method: Obsolete]
@@ -194,6 +195,10 @@ namespace My
                 ++i;
                 var s1 = $"x {1 , -2 :d}";
                 var s2 = $@"x {1 , -2 :d}";
+            }
+
+            int LocalFunction()
+            {
             }
 
 #if DEBUG
@@ -216,6 +221,11 @@ namespace My
                 lu = 1lu, Lu = 1Lu, lU = 1lU, LU = 1LU;
             int minInt32Value = -2147483648;
             int minInt64Value = -9223372036854775808L;
+
+            ref string stringRef;
+            stringRef = ref System.String.Empty;
+
+            ref string stringRef1 = ref System.String.Empty;
 
             bool @bool;
             byte @byte;
@@ -290,6 +300,7 @@ namespace My
                 0f,
                 1.1f
             };
+            var (tuple, _) = (named: 1, 2);
             int[, ,] cube = { { { 111, 112, }, { 121, 122 } }, { { 211, 212 }, { 221, 222 } } };
             int[][] jagged = { { 111 }, { 121, 122 } };
             int[][,] arr = new int[5][,]; // as opposed to new int[][5,5]
@@ -309,6 +320,10 @@ namespace My
                         goto default;
                         break;
                     }
+                case 4 when true:
+                    break;
+                case int i:
+                    break;
                 default:
                     {
                         return;
@@ -317,7 +332,8 @@ namespace My
             while (i &lt; 10)
             {
                 ++i;
-                if (true) continue;
+                if (i is int q) continue;
+                void LocalFcn() =&gt; throw null;
                 break;
             }
             do
@@ -345,6 +361,9 @@ namespace My
                     return;
                 else
                     continue;
+            }
+            foreach (var (_, _) in new (int, int)[]{ (1, 2) })
+            {
             }
             checked
             {
@@ -942,6 +961,7 @@ L:
             Dim o4 = New MyObject(dynamic) With {.A = 0, .B = 0, .C = 0}
             Dim o5 = New With {Key .A = 0}
             Dim a() As Integer = {0, 1, 2, 3, 4, 5}
+            Dim a As(named As Integer, Integer) =(named:=1, 2)
             Select Case i
                 Case 1
                     GoTo CaseLabel1
@@ -1972,6 +1992,7 @@ L:
             Dim o4 = New MyObject(dynamic) With {.A = 0, .B = 0, .C = 0}
             Dim o5 = New With {Key .A = 0}
             Dim a() As Integer = {0, 1, 2, 3, 4, 5}
+            Dim a As(named As Integer, Integer) =(named:=1, 2)
             Select Case i
                 Case 1
                     GoTo CaseLabel1

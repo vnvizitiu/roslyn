@@ -1,11 +1,11 @@
-' Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+﻿' Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
 Imports System.Reflection
 Imports System.Threading.Tasks
 Imports Microsoft.CodeAnalysis.CodeFixes
-Imports Microsoft.CodeAnalysis.CSharp.CodeFixes.AddMissingReference
+Imports Microsoft.CodeAnalysis.CSharp.AddMissingReference
 Imports Microsoft.CodeAnalysis.Diagnostics
-Imports Microsoft.CodeAnalysis.VisualBasic.CodeFixes.AddMissingReference
+Imports Microsoft.CodeAnalysis.VisualBasic.AddMissingReference
 
 Namespace Microsoft.CodeAnalysis.Editor.UnitTests.Diagnostics.AddMissingReference
     Public Class AddMissingReferenceTests
@@ -23,13 +23,13 @@ Namespace Microsoft.CodeAnalysis.Editor.UnitTests.Diagnostics.AddMissingReferenc
             s_systemXamlAssembly = Assembly.Load("System.Xaml, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089")
         End Sub
 
-        Friend Overrides Function CreateDiagnosticProviderAndFixer(workspace As Workspace, language As String) As Tuple(Of DiagnosticAnalyzer, CodeFixProvider)
+        Friend Overrides Function CreateDiagnosticProviderAndFixer(workspace As Workspace, language As String) As (DiagnosticAnalyzer, CodeFixProvider)
             Dim fixer As CodeFixProvider =
                 CType(If(language = LanguageNames.CSharp,
                    DirectCast(New CSharpAddMissingReferenceCodeFixProvider(), CodeFixProvider),
                    DirectCast(New VisualBasicAddMissingReferenceCodeFixProvider(), CodeFixProvider)), CodeFixProvider)
 
-            Return Tuple.Create(Of DiagnosticAnalyzer, CodeFixProvider)(Nothing, fixer)
+            Return (Nothing, fixer)
         End Function
 
         <Fact, Trait(Traits.Feature, Traits.Features.CodeActionsAddMissingReference)>

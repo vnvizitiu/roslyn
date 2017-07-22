@@ -1,10 +1,15 @@
-﻿using System;
+﻿// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+
+using System;
 using Microsoft.CodeAnalysis.CSharp.Symbols;
 using Microsoft.CodeAnalysis.CSharp.Test.Utilities;
+using Microsoft.CodeAnalysis.PooledObjects;
 using Xunit;
 using System.Linq;
 using System.Collections.Generic;
 using Microsoft.CodeAnalysis.Test.Utilities;
+using Roslyn.Test.Utilities;
+using System.Reflection.Metadata;
 
 namespace Microsoft.CodeAnalysis.CSharp.UnitTests
 {
@@ -104,7 +109,7 @@ public class Derived<T> : Outer<(int e1, (int e2, int e3) e4)>.Inner<
         [Fact]
         public void TestTupleAttributes()
         {
-            var comp = CreateCompilationWithMscorlib(s_tuplesTestSource,
+            var comp = CreateStandardCompilation(s_tuplesTestSource,
                 options: TestOptions.UnsafeReleaseDll,
                 references: s_attributeRefs);
             TupleAttributeValidator.ValidateTupleAttributes(comp);
@@ -113,7 +118,7 @@ public class Derived<T> : Outer<(int e1, (int e2, int e3) e4)>.Inner<
         [Fact]
         public void TupleAttributeWithOnlyOneConstructor()
         {
-            var comp = CreateCompilationWithMscorlib(
+            var comp = CreateStandardCompilation(
                 s_tuplesTestSource + TestResources.NetFX.ValueTuple.tuplelib_cs + @"
 namespace System.Runtime.CompilerServices
 {
@@ -222,9 +227,9 @@ class C
 
             var srcTypes = sourceModule.GlobalNamespace.GetTypeMembers();
             var peTypes = peModule.GlobalNamespace.GetTypeMembers()
-                .Where(t => t.Name != "<Module>").ToList();
+                .WhereAsArray(t => t.Name != "<Module>");
 
-            Assert.Equal(srcTypes.Length, peTypes.Count);
+            Assert.Equal(srcTypes.Length, peTypes.Length);
 
             for (int i = 0; i < srcTypes.Length; i++)
             {
@@ -241,24 +246,15 @@ class C
                     .Select(ToTestString)
                     .ToList();
 
-                Assert.Equal(srcMembers.Count, peMembers.Count);
-
                 srcMembers.Sort();
                 peMembers.Sort();
-
-                for (int j = 0; j < srcMembers.Count; j++)
-                {
-                    var srcMember = srcMembers[j];
-                    var peMember = peMembers[j];
-
-                    Assert.Equal(srcMember, peMember);
-                }
+                AssertEx.Equal(srcMembers, peMembers);
             }
         }
 
         private static string ToTestString(Symbol symbol)
         {
-            var typeSymbols = new List<TypeSymbol>();
+            var typeSymbols = ArrayBuilder<TypeSymbol>.GetInstance();
             switch (symbol.Kind)
             {
                 case SymbolKind.Method:
@@ -282,13 +278,13 @@ class C
             }
             var symbolString = string.Join(" | ", typeSymbols
                 .Select(s => s.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)));
+            typeSymbols.Free();
             return $"{symbol.Name}: {symbolString}";
         }
 
         private struct TupleAttributeValidator
         {
             private readonly MethodSymbol _tupleAttrTransformNames;
-            private readonly ModuleSymbol _srcModule;
             private readonly CSharpCompilation _comp;
             private readonly NamedTypeSymbol _base0Class, _base1Class,
                 _base2Class, _outerClass, _derivedClass;
@@ -297,10 +293,10 @@ class C
             {
                 _tupleAttrTransformNames = (MethodSymbol)compilation.GetWellKnownTypeMember(
                     WellKnownMember.System_Runtime_CompilerServices_TupleElementNamesAttribute__ctorTransformNames);
+                Assert.NotNull(_tupleAttrTransformNames);
 
                 _comp = compilation;
-                _srcModule = compilation.SourceModule;
-                var globalNs = _srcModule.GlobalNamespace;
+                var globalNs = compilation.SourceModule.GlobalNamespace;
 
                 _base0Class = globalNs.GetTypeMember("Base0");
                 _base1Class = globalNs.GetTypeMember("Base1");
@@ -366,17 +362,17 @@ class C
             {
                 // public static event Delegate1<(dynamic e1,
                 //                                ValueTuple<(dynamic e2, dynamic e3)> e4)> Event1;
-                var event1Type = _derivedClass.GetMember<EventSymbol>("Event1");
-                Assert.NotNull(event1Type);
+                var event1 = _derivedClass.GetMember<EventSymbol>("Event1");
+                Assert.NotNull(event1);
 
-                ValidateTupleNameAttribute(event1Type,
+                ValidateTupleNameAttribute(event1,
                     expectedTupleNamesAttribute: true,
                     expectedElementNames: new[]
                     {
                         "e1", "e4", null, "e2", "e3"
                     });
                 AttributeTests_Dynamic.DynamicAttributeValidator.ValidateDynamicAttribute(
-                    event1Type, _comp,
+                    event1, _comp,
                     expectedDynamicAttribute: true,
                     expectedTransformFlags: new[]
                     {
@@ -464,7 +460,6 @@ class C
                         false, true, false, false,
                         true, true 
                     });
-
 
                 // public static Base1<(int, ValueTuple<int, ValueTuple>)> Field6;
                 var field6 = _derivedClass.GetMember<FieldSymbol>("Field6");
@@ -560,20 +555,18 @@ class C
                     forReturnType: true);
 
                 ValidateTupleNameAttribute(method5.Parameters.Single(),
-                    expectedTupleNamesAttribute: false,
-                    expectedElementNames: expectedElementNames);
-
+                    expectedTupleNamesAttribute: false);
 
                 // public static (int e1, int e2, int e3, int e4, int e5,
                 //                int e6, int e7, int e8, int e9) Method6() => (0, 0, 0, 0,
                 //                                                              0, 0, 0, 0, 0);
-                var field9 = _derivedClass.GetMember<MethodSymbol>("Method6");
+                var method6 = _derivedClass.GetMember<MethodSymbol>("Method6");
                 expectedElementNames = new[]
                 {
                     "e1", "e2", "e3", "e4", "e5",
                     "e6", "e7", "e8", "e9", null, null
                 };
-                ValidateTupleNameAttribute(field9, expectedTupleNamesAttribute: true,
+                ValidateTupleNameAttribute(method6, expectedTupleNamesAttribute: true,
                     expectedElementNames: expectedElementNames,
                     forReturnType: true);
             }
@@ -616,51 +609,42 @@ class C
                     .Where(attr => string.Equals(attr.AttributeClass.Name,
                                                  "TupleElementNamesAttribute",
                                                  StringComparison.Ordinal))
-                    .ToList();
+                    .AsImmutable();
                 if (!expectedTupleNamesAttribute)
                 {
                     Assert.Empty(synthesizedTupleElementNamesAttr);
+                    Assert.Null(expectedElementNames);
                 }
                 else
                 {
                     var tupleAttr = synthesizedTupleElementNamesAttr.Single();
-                    var expectedCtor = _tupleAttrTransformNames;
-                    Assert.NotNull(expectedCtor);
-                    Assert.Equal(expectedCtor, tupleAttr.AttributeConstructor);
+                    Assert.Equal(_tupleAttrTransformNames, tupleAttr.AttributeConstructor);
 
                     if (expectedElementNames == null)
                     {
-                        Assert.Empty(tupleAttr.CommonConstructorArguments);
+                        Assert.True(tupleAttr.CommonConstructorArguments.IsEmpty);
                     }
                     else
                     {
-                        Assert.Equal(1, tupleAttr.CommonConstructorArguments.Length);
-
-                        var arg = tupleAttr.CommonConstructorArguments[0];
+                        var arg = tupleAttr.CommonConstructorArguments.Single();
                         Assert.Equal(TypedConstantKind.Array, arg.Kind);
-
-                        var actualElementNames = arg.Values;
-                        Assert.Equal(expectedElementNames.Length, actualElementNames.Length);
-                        var stringType = _comp.GetSpecialType(SpecialType.System_String);
-
-                        for (int i =  0; i < actualElementNames.Length; i++)
-                        {
-                            string expectedName = expectedElementNames[i];
-                            TypedConstant actualName = actualElementNames[i];
-
-                            Assert.Equal(TypedConstantKind.Primitive, actualName.Kind);
-                            Assert.Equal(stringType, actualName.Type);
-                            Assert.Equal(expectedName, (string)actualName.Value);
-                        }
+                        var actualElementNames = arg.Values.SelectAsArray(TypedConstantString);
+                        AssertEx.Equal(expectedElementNames, actualElementNames);
                     }
                 }
+            }
+
+            private static string TypedConstantString(TypedConstant constant)
+            {
+                Assert.True(constant.Type.SpecialType == SpecialType.System_String);
+                return (string)constant.Value;
             }
         }
 
         [Fact]
         public void TupleAttributeMissing()
         {
-            var comp = CreateCompilationWithMscorlib(
+            var comp = CreateStandardCompilation(
                 s_tuplesTestSource + TestResources.NetFX.ValueTuple.tuplelib_cs,
                 references: new[] { SystemCoreRef },
                 options: TestOptions.ReleaseDll);
@@ -822,7 +806,7 @@ public class C
 public struct S
 {
 }";
-            var comp = CreateCompilationWithMscorlib(text, references: s_attributeRefs);
+            var comp = CreateStandardCompilation(text, references: s_attributeRefs);
             comp.VerifyDiagnostics(
                 // (31,2): error CS8208: Cannot reference 'System.Runtime.CompilerServices.TupleElementNamesAttribute' explicitly. Use the tuple syntax to define tuple names.
                 // [TupleElementNames(new[] { "a", "b" })]
@@ -854,6 +838,206 @@ public struct S
                 // (8,6): error CS8208: Cannot reference 'System.Runtime.CompilerServices.TupleElementNamesAttribute' explicitly. Use the tuple syntax to define tuple names.
                 //     [TupleElementNames(new string[] { null, null })]
                 Diagnostic(ErrorCode.ERR_ExplicitTupleElementNamesAttribute, "TupleElementNames(new string[] { null, null })").WithLocation(8, 6));
+        }
+
+        [Fact]
+        [WorkItem(14844, "https://github.com/dotnet/roslyn/issues/14844")]
+        public void AttributesOnTypeConstraints()
+        {
+            var src = @"
+public interface I1<T> {}
+
+public interface I2<T>
+    where T : I1<(int a, int b)> {}
+public interface I3<T>
+    where T : I1<(int c, int d)> {}";
+
+            Action<PEAssembly> validator = assembly =>
+            {
+                var reader = assembly.GetMetadataReader();
+
+                Action<TypeDefinition, string[]> verifyTupleConstraint = (def, tupleNames) =>
+                {
+                    var typeParams = def.GetGenericParameters();
+                    Assert.Equal(1, typeParams.Count);
+                    var typeParam = reader.GetGenericParameter(typeParams[0]);
+                    var constraintHandles = typeParam.GetConstraints();
+                    Assert.Equal(1, constraintHandles.Count);
+                    var constraint = reader.GetGenericParameterConstraint(constraintHandles[0]);
+
+                    var attributes = constraint.GetCustomAttributes();
+                    Assert.Equal(1, attributes.Count);
+                    var attr = reader.GetCustomAttribute(attributes.Single());
+
+                    // Verify that the attribute contains an array of matching tuple names
+                    var argsReader = reader.GetBlobReader(attr.Value);
+                    // Prolog
+                    Assert.Equal(1, argsReader.ReadUInt16());
+                    // Array size
+                    Assert.Equal(tupleNames.Length, argsReader.ReadInt32());
+
+                    foreach (var name in tupleNames)
+                    {
+                        Assert.Equal(name, argsReader.ReadSerializedString());
+                    }
+                };
+
+                foreach (var typeHandle in reader.TypeDefinitions)
+                {
+                    var def = reader.GetTypeDefinition(typeHandle);
+                    var name = reader.GetString(def.Name);
+                    switch (name)
+                    {
+                        case "I1`1":
+                        case "<Module>":
+                            continue;
+
+                        case "I2`1":
+                            verifyTupleConstraint(def, new[] { "a", "b" });
+                            break;
+
+                        case "I3`1":
+                            verifyTupleConstraint(def, new[] { "c", "d" });
+                            break;
+
+                        default:
+                            throw TestExceptionUtilities.UnexpectedValue(name);
+                    }
+                }
+            };
+
+            void symbolValidator(ModuleSymbol m)
+            {
+                foreach (var t in m.GlobalNamespace.GetTypeMembers())
+                {
+                    switch(t.Name)
+                    {
+                        case "I1":
+                        case "<Module>":
+                            continue;
+
+                        case "I2":
+                            verifyTupleImpls(t, new[] { "a", "b" });
+                            break;
+
+                        case "I3":
+                            verifyTupleImpls(t, new[] { "c", "d" });
+                            break;
+                    }
+                }
+                void verifyTupleImpls(NamedTypeSymbol t, string[] tupleNames)
+                {
+                    var typeParam = t.TypeParameters.Single();
+                    var constraint = (NamedTypeSymbol)typeParam.ConstraintTypes.Single();
+                    var typeArg = constraint.TypeArguments.Single();
+                    Assert.True(typeArg.IsTupleType);
+                    Assert.Equal(tupleNames, typeArg.TupleElementNames);
+                }
+            }
+
+            CompileAndVerify(src,
+                additionalRefs: new[] { ValueTupleRef, SystemRuntimeFacadeRef },
+                assemblyValidator: validator,
+                symbolValidator: symbolValidator);
+        }
+
+        [Fact]
+        [WorkItem(14844, "https://github.com/dotnet/roslyn/issues/14844")]
+        public void AttributesOnInterfaceImplementations()
+        {
+            var src = @"
+public interface I1<T> {}
+
+public interface I2 : I1<(int a, int b)> {}
+public interface I3 : I1<(int c, int d)> {}";
+
+            Action<PEAssembly> validator = (assembly) =>
+            {
+                var reader = assembly.GetMetadataReader();
+
+                Action<TypeDefinition, string[]> verifyTupleImpls = (def, tupleNames) =>
+                {
+                    var interfaceImpls = def.GetInterfaceImplementations();
+                    Assert.Equal(1, interfaceImpls.Count);
+                    var interfaceImpl = reader.GetInterfaceImplementation(interfaceImpls.Single());
+
+                    var attributes = interfaceImpl.GetCustomAttributes();
+                    Assert.Equal(1, attributes.Count);
+                    var attr = reader.GetCustomAttribute(attributes.Single());
+
+                    // Verify that the attribute contains an array of matching tuple names
+                    var argsReader = reader.GetBlobReader(attr.Value);
+                    // Prolog
+                    Assert.Equal(1, argsReader.ReadUInt16());
+                    // Array size
+                    Assert.Equal(tupleNames.Length, argsReader.ReadInt32());
+
+                    foreach (var name in tupleNames)
+                    {
+                        Assert.Equal(name, argsReader.ReadSerializedString());
+                    }
+                };
+
+                foreach (var typeHandle in reader.TypeDefinitions)
+                {
+                    var def = reader.GetTypeDefinition(typeHandle);
+                    var name = reader.GetString(def.Name);
+                    switch (name)
+                    {
+                        case "I1`1":
+                        case "<Module>":
+                            continue;
+
+                        case "I2":
+                            verifyTupleImpls(def, new[] { "a", "b" });
+                            break;
+
+                        case "I3":
+                            verifyTupleImpls(def, new[] { "c", "d" });
+                            break;
+
+                        default:
+                            throw TestExceptionUtilities.UnexpectedValue(name);
+                    }
+                }
+            };
+
+            void symbolValidator(ModuleSymbol m)
+            {
+                foreach (var t in m.GlobalNamespace.GetTypeMembers())
+                {
+                    switch (t.Name)
+                    {
+                        case "I1":
+                        case "<Module>":
+                            continue;
+
+                        case "I2":
+                            VerifyTupleImpls(t, new[] { "a", "b" });
+                            break;
+
+                        case "I3":
+                            VerifyTupleImpls(t, new[] { "c", "d" });
+                            break;
+
+                        default:
+                            throw TestExceptionUtilities.UnexpectedValue(t.Name);
+                    }
+                }
+
+                void VerifyTupleImpls(NamedTypeSymbol t, string[] tupleNames)
+                {
+                    var interfaceImpl = t.Interfaces.Single();
+                    var typeArg = interfaceImpl.TypeArguments.Single();
+                    Assert.True(typeArg.IsTupleType);
+                    Assert.Equal(tupleNames, typeArg.TupleElementNames);
+                }
+            }
+
+            CompileAndVerify(src,
+                additionalRefs: new[] { ValueTupleRef, SystemRuntimeFacadeRef },
+                assemblyValidator: validator,
+                symbolValidator: symbolValidator);
         }
     }
 }

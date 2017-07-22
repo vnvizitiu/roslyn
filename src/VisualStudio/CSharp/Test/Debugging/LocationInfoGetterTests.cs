@@ -1,4 +1,4 @@
-// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+﻿// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
 using System.Linq;
 using System.Threading;
@@ -16,7 +16,7 @@ namespace Microsoft.CodeAnalysis.Editor.CSharp.UnitTests.Debugging
     {
         private async Task TestAsync(string markup, string expectedName, int expectedLineOffset, CSharpParseOptions parseOptions = null)
         {
-            using (var workspace = await TestWorkspace.CreateCSharpAsync(markup, parseOptions))
+            using (var workspace = TestWorkspace.CreateCSharp(markup, parseOptions))
             {
                 var testDocument = workspace.Documents.Single();
                 var position = testDocument.CursorPosition.Value;

@@ -1,4 +1,4 @@
-// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+﻿// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
 using System;
 using System.Collections.Generic;
@@ -69,9 +69,7 @@ namespace Microsoft.CodeAnalysis.Editor.UnitTests
             _textView = cursorDocument.GetTextView();
             _subjectBuffer = cursorDocument.GetTextBuffer();
 
-            IList<Text.TextSpan> selectionSpanList;
-
-            if (cursorDocument.AnnotatedSpans.TryGetValue("Selection", out selectionSpanList))
+            if (cursorDocument.AnnotatedSpans.TryGetValue("Selection", out var selectionSpanList))
             {
                 var firstSpan = selectionSpanList.First();
                 var lastSpan = selectionSpanList.Last();
@@ -81,7 +79,7 @@ namespace Microsoft.CodeAnalysis.Editor.UnitTests
                             || cursorPosition == lastSpan.Start || cursorPosition == lastSpan.End,
                     "cursorPosition wasn't at an endpoint of the 'Selection' annotated span");
 
-                _textView.Selection.Mode = selectionSpanList.Count > 1
+                _textView.Selection.Mode = selectionSpanList.Length > 1
                     ? TextSelectionMode.Box
                     : TextSelectionMode.Stream;
 
@@ -416,6 +414,11 @@ namespace Microsoft.CodeAnalysis.Editor.UnitTests
         public void SendSelectAll(Action<SelectAllCommandArgs, Action> commandHandler, Action nextHandler)
         {
             commandHandler(new SelectAllCommandArgs(TextView, SubjectBuffer), nextHandler);
+        }
+
+        public void SendToggleCompletionMode(Action<ToggleCompletionModeCommandArgs, Action> commandHandler, Action nextHandler)
+        {
+            commandHandler(new ToggleCompletionModeCommandArgs(TextView, SubjectBuffer), nextHandler);
         }
         #endregion
     }

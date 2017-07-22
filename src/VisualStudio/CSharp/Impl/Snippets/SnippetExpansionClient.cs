@@ -1,4 +1,4 @@
-// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+﻿// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
 using System;
 using System.Collections.Generic;
@@ -42,8 +42,7 @@ namespace Microsoft.VisualStudio.LanguageServices.CSharp.Snippets
                 return null;
             }
 
-            SnapshotSpan subjectBufferEndSpan;
-            if (!TryGetSubjectBufferSpan(endSpanInSurfaceBuffer[0], out subjectBufferEndSpan))
+            if (!TryGetSubjectBufferSpan(endSpanInSurfaceBuffer[0], out var subjectBufferEndSpan))
             {
                 return null;
             }
@@ -59,8 +58,7 @@ namespace Microsoft.VisualStudio.LanguageServices.CSharp.Snippets
 
         public override int GetExpansionFunction(IXMLDOMNode xmlFunctionNode, string bstrFieldName, out IVsExpansionFunction pFunc)
         {
-            string snippetFunctionName, param;
-            if (!TryGetSnippetFunctionInfo(xmlFunctionNode, out snippetFunctionName, out param))
+            if (!TryGetSnippetFunctionInfo(xmlFunctionNode, out var snippetFunctionName, out var param))
             {
                 pFunc = null;
                 return VSConstants.E_INVALIDARG;
@@ -111,7 +109,8 @@ namespace Microsoft.VisualStudio.LanguageServices.CSharp.Snippets
             }
 
             var addImportService = document.GetLanguageService<IAddImportsService>();
-            var newRoot = addImportService.AddImports(root, contextLocation, newUsingDirectives, placeSystemNamespaceFirst);
+            var compilation = document.Project.GetCompilationAsync(cancellationToken).WaitAndGetResult(cancellationToken);
+            var newRoot = addImportService.AddImports(compilation, root, contextLocation, newUsingDirectives, placeSystemNamespaceFirst);
 
             var newDocument = document.WithSyntaxRoot(newRoot);
 

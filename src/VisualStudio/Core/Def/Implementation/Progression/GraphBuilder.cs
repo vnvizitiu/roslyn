@@ -138,8 +138,7 @@ namespace Microsoft.VisualStudio.LanguageServices.Implementation.Progression
         {
             using (_gate.DisposableWait())
             {
-                Project project;
-                _nodeToContextProjectMap.TryGetValue(node, out project);
+                _nodeToContextProjectMap.TryGetValue(node, out var project);
                 return project;
             }
         }
@@ -154,8 +153,7 @@ namespace Microsoft.VisualStudio.LanguageServices.Implementation.Progression
         {
             using (_gate.DisposableWait())
             {
-                Document document;
-                _nodeToContextDocumentMap.TryGetValue(node, out document);
+                _nodeToContextDocumentMap.TryGetValue(node, out var document);
                 return document;
             }
         }
@@ -164,8 +162,7 @@ namespace Microsoft.VisualStudio.LanguageServices.Implementation.Progression
         {
             using (_gate.DisposableWait())
             {
-                ISymbol symbol;
-                _nodeToSymbolMap.TryGetValue(node, out symbol);
+                _nodeToSymbolMap.TryGetValue(node, out var symbol);
                 return symbol;
             }
         }
@@ -342,7 +339,7 @@ namespace Microsoft.VisualStudio.LanguageServices.Implementation.Progression
             {
                 case SymbolKind.NamedType:
                     var typeSymbol = (INamedTypeSymbol)symbol;
-                    if (typeSymbol != null && typeSymbol.IsGenericType)
+                    if (typeSymbol.IsGenericType)
                     {
                         // Symbol.name does not contain type params for generic types, so we populate them here for some requiring cases like VS properties panel.
                         node.Label = (string)node[RoslynGraphProperties.FormattedLabelWithoutContainingSymbol];
@@ -391,8 +388,8 @@ namespace Microsoft.VisualStudio.LanguageServices.Implementation.Progression
                 case SymbolKind.Property:
                     node.Label = symbol.MetadataName;
 
-                    var propertySymbol = symbol as IPropertySymbol;
-                    if (propertySymbol != null && propertySymbol.IsIndexer && LanguageNames.CSharp == propertySymbol.Language)
+                    var propertySymbol = (IPropertySymbol)symbol;
+                    if (propertySymbol.IsIndexer && LanguageNames.CSharp == propertySymbol.Language)
                     {
                         // For C# indexer, we will strip off the "[]"
                         node.Label = symbol.Name.Replace("[]", string.Empty);
@@ -486,9 +483,9 @@ namespace Microsoft.VisualStudio.LanguageServices.Implementation.Progression
             {
                 node[Properties.IsAnonymous] = true;
             }
-            else if (symbol is IMethodSymbol)
+            else if (symbol is IMethodSymbol methodSymbol)
             {
-                UpdateMethodPropertiesForNode((IMethodSymbol)symbol, node);
+                UpdateMethodPropertiesForNode(methodSymbol, node);
             }
         }
 
@@ -592,7 +589,7 @@ namespace Microsoft.VisualStudio.LanguageServices.Implementation.Progression
                     break;
 
                 default:
-                    throw ExceptionUtilities.Unreachable;
+                    throw ExceptionUtilities.UnexpectedValue(namedType.TypeKind);
             }
 
             node[DgmlNodeProperties.Icon] = IconHelper.GetIconName(iconGroupName, namedType.DeclaredAccessibility);

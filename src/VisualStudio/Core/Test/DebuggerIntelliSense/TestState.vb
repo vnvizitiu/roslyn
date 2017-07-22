@@ -1,4 +1,4 @@
-' Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+﻿' Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
 Imports System.Threading
 Imports System.Threading.Tasks
@@ -66,7 +66,6 @@ Namespace Microsoft.VisualStudio.LanguageServices.UnitTests.DebuggerIntelliSense
                 GetService(Of IEditorOperationsFactoryService)(),
                 UndoHistoryRegistry,
                 GetService(Of IInlineRenameService)(),
-                GetService(Of IWaitIndicator)(),
                 New TestCompletionPresenter(Me),
                 GetExports(Of IAsynchronousOperationListener, FeatureMetadata)(),
                 GetExports(Of IBraceCompletionSessionProvider, BraceCompletionMetadata)())
@@ -196,6 +195,11 @@ Namespace Microsoft.VisualStudio.LanguageServices.UnitTests.DebuggerIntelliSense
         Public Overloads Sub SendSelectCompletionItemThroughPresenterSession(item As CompletionItem)
             AssertNoAsynchronousOperationsRunning()
             CurrentCompletionPresenterSession.SetSelectedItem(item)
+        End Sub
+
+        Public Overloads Sub SendToggleCompletionMode()
+            Dim handler = DirectCast(CompletionCommandHandler, ICommandHandler(Of ToggleCompletionModeCommandArgs))
+            MyBase.SendToggleCompletionmode(Sub(a, n) handler.ExecuteCommand(a, n), Sub() Return)
         End Sub
 
         Public Async Function AssertNoCompletionSession(Optional block As Boolean = True) As Task

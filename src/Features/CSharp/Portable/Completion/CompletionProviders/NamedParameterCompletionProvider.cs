@@ -1,4 +1,4 @@
-// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+﻿// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
 using System.Collections.Generic;
 using System.Collections.Immutable;
@@ -95,14 +95,12 @@ namespace Microsoft.CodeAnalysis.CSharp.Completion.Providers
                 // exact match.
                 var escapedName = parameter.Name.ToIdentifierToken().ToString();
 
-                context.AddItem(SymbolCompletionItem.Create(
+                context.AddItem(SymbolCompletionItem.CreateWithSymbolId(
                     displayText: escapedName + ColonString,
-                    insertionText: null,
-                    symbol: parameter,
+                    symbols: ImmutableArray.Create(parameter),
+                    rules: s_rules.WithMatchPriority(SymbolMatchPriority.PreferNamedArgument),
                     contextPosition: token.SpanStart,
-                    filterText: escapedName,
-                    rules: s_rules,
-                    matchPriority: SymbolMatchPriority.PreferNamedArgument));
+                    filterText: escapedName));
             }
         }
 
@@ -130,11 +128,14 @@ namespace Microsoft.CodeAnalysis.CSharp.Completion.Providers
             SyntaxNode invocableNode,
             CancellationToken cancellationToken)
         {
-            return invocableNode.TypeSwitch(
-                (InvocationExpressionSyntax invocationExpression) => GetInvocationExpressionParameterLists(semanticModel, position, invocationExpression, cancellationToken),
-                (ConstructorInitializerSyntax constructorInitializer) => GetConstructorInitializerParameterLists(semanticModel, position, constructorInitializer, cancellationToken),
-                (ElementAccessExpressionSyntax elementAccessExpression) => GetElementAccessExpressionParameterLists(semanticModel, position, elementAccessExpression, cancellationToken),
-                (ObjectCreationExpressionSyntax objectCreationExpression) => GetObjectCreationExpressionParameterLists(semanticModel, position, objectCreationExpression, cancellationToken));
+            switch (invocableNode)
+            {
+                case InvocationExpressionSyntax invocationExpression: return GetInvocationExpressionParameterLists(semanticModel, position, invocationExpression, cancellationToken);
+                case ConstructorInitializerSyntax constructorInitializer: return GetConstructorInitializerParameterLists(semanticModel, position, constructorInitializer, cancellationToken);
+                case ElementAccessExpressionSyntax elementAccessExpression: return GetElementAccessExpressionParameterLists(semanticModel, position, elementAccessExpression, cancellationToken);
+                case ObjectCreationExpressionSyntax objectCreationExpression: return GetObjectCreationExpressionParameterLists(semanticModel, position, objectCreationExpression, cancellationToken);
+                default: return null;
+            }
         }
 
         private IEnumerable<ImmutableArray<IParameterSymbol>> GetObjectCreationExpressionParameterLists(

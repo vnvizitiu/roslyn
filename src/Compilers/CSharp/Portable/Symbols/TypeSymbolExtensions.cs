@@ -4,6 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Diagnostics;
+using Microsoft.CodeAnalysis.PooledObjects;
 using Roslyn.Utilities;
 
 namespace Microsoft.CodeAnalysis.CSharp.Symbols
@@ -25,6 +26,12 @@ namespace Microsoft.CodeAnalysis.CSharp.Symbols
         public static bool CanBeAssignedNull(this TypeSymbol type)
         {
             return type.IsReferenceType || type.IsPointerType() || type.IsNullableType();
+        }
+
+        public static bool CanContainNull(this TypeSymbol type)
+        {
+            // unbound type parameters might contain null, even though they cannot be *assigned* null.
+            return !type.IsValueType || type.IsNullableType();
         }
 
         public static bool CanBeConst(this TypeSymbol typeSymbol)
@@ -1314,7 +1321,6 @@ namespace Microsoft.CodeAnalysis.CSharp.Symbols
         internal static bool IsCustomTaskType(this NamedTypeSymbol type, out object builderArgument)
         {
             Debug.Assert((object)type != null);
-            Debug.Assert(type.SpecialType != SpecialType.System_Void);
 
             var arity = type.Arity;
             if (arity < 2)
@@ -1431,7 +1437,7 @@ namespace Microsoft.CodeAnalysis.CSharp.Symbols
                         ImmutableArray.Create(
                             new TypeWithModifiers(
                                 type.TypeArgumentsNoUseSiteDiagnostics[0],
-                                type.HasTypeArgumentsCustomModifiers ? type.TypeArgumentsCustomModifiers[0] : default(ImmutableArray<CustomModifier>))),
+                                type.HasTypeArgumentsCustomModifiers ? type.GetTypeArgumentCustomModifiers(0) : default(ImmutableArray<CustomModifier>))),
                         unbound: false);
                 hasChanged = true;
             }

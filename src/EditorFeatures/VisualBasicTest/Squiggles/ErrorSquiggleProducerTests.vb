@@ -1,9 +1,10 @@
-' Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+﻿' Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
 Imports System.Collections.Immutable
 Imports Microsoft.CodeAnalysis
 Imports Microsoft.CodeAnalysis.CodeStyle
 Imports Microsoft.CodeAnalysis.Diagnostics
+Imports Microsoft.CodeAnalysis.Editor.Implementation.Diagnostics
 Imports Microsoft.CodeAnalysis.Editor.UnitTests.Extensions
 Imports Microsoft.CodeAnalysis.Editor.UnitTests.Squiggles
 Imports Microsoft.CodeAnalysis.Editor.UnitTests.Workspaces
@@ -15,17 +16,18 @@ Imports Microsoft.VisualStudio.Text.Tagging
 
 Namespace Microsoft.CodeAnalysis.Editor.VisualBasic.UnitTests.Squiggles
     Public Class ErrorSquiggleProducerTests
-        Inherits AbstractSquiggleProducerTests
 
-        Private Async Function ProduceSquiggles(content As String) As Task(Of IEnumerable(Of ITagSpan(Of IErrorTag)))
-            Using workspace = Await TestWorkspace.CreateVisualBasicAsync(content)
-                Return (Await GetDiagnosticsAndErrorSpans(workspace)).Item2
+        Private _producer As New DiagnosticTagProducer(Of DiagnosticsSquiggleTaggerProvider)
+
+        Private Async Function ProduceSquiggles(content As String) As Task(Of ImmutableArray(Of ITagSpan(Of IErrorTag)))
+            Using workspace = TestWorkspace.CreateVisualBasic(content)
+                Return (Await _producer.GetDiagnosticsAndErrorSpans(workspace)).Item2
             End Using
         End Function
 
-        Private Async Function ProduceSquiggles(analyzerMap As Dictionary(Of String, DiagnosticAnalyzer()), content As String) As Task(Of IEnumerable(Of ITagSpan(Of IErrorTag)))
-            Using workspace = Await TestWorkspace.CreateVisualBasicAsync(content)
-                Return (Await GetDiagnosticsAndErrorSpans(workspace, analyzerMap)).Item2
+        Private Async Function ProduceSquiggles(analyzerMap As Dictionary(Of String, DiagnosticAnalyzer()), content As String) As Task(Of ImmutableArray(Of ITagSpan(Of IErrorTag)))
+            Using workspace = TestWorkspace.CreateVisualBasic(content)
+                Return (Await _producer.GetDiagnosticsAndErrorSpans(workspace, analyzerMap)).Item2
             End Using
         End Function
 
@@ -98,7 +100,7 @@ End Class"
                         New VisualBasicRemoveUnnecessaryImportsDiagnosticAnalyzer()
                     })
 
-            Using workspace = Await TestWorkspace.CreateVisualBasicAsync(content)
+            Using workspace = TestWorkspace.CreateVisualBasic(content)
                 Dim options As New Dictionary(Of OptionKey, Object)
                 Dim language = workspace.Projects.Single().Language
                 Dim preferIntrinsicPredefinedTypeOption = New OptionKey(CodeStyleOptions.PreferIntrinsicPredefinedTypeKeywordInDeclaration, language)
@@ -106,7 +108,7 @@ End Class"
                 options.Add(preferIntrinsicPredefinedTypeOption, preferIntrinsicPredefinedTypeOptionValue)
                 workspace.ApplyOptions(options)
 
-                Dim spans = (Await GetDiagnosticsAndErrorSpans(workspace, analyzerMap)).Item2.OrderBy(Function(s) s.Span.Span.Start).ToImmutableArray()
+                Dim spans = (Await _producer.GetDiagnosticsAndErrorSpans(workspace, analyzerMap)).Item2.OrderBy(Function(s) s.Span.Span.Start).ToImmutableArray()
 
                 Assert.Equal(2, spans.Length)
                 Dim first = spans(0)
